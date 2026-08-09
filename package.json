@@ -1,0 +1,58 @@
+{
+  "name": "syndrid-tui-studio",
+  "private": true,
+  "version": "0.4.0-syndrid.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "mcp-server": "node mcp-server/index.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify:syndrid": "node scripts/verify-syndrid.mjs",
+    "tauri": "npx -y @tauri-apps/cli@2.11.4",
+    "desktop:dev": "npm run tauri -- dev",
+    "desktop:build": "npm run tauri -- build --bundles nsis",
+    "desktop:info": "npm run tauri -- info"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "diff": "^9.0.0",
+    "lucide-react": "^0.542.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "tailwind-merge": "^3.4.0",
+    "ws": "^8.21.1",
+    "zod": "^3.25.76",
+    "zustand": "^5.0.8"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.33.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "playwright": "^1.58.2",
+    "postcss": "^8.5.6",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.39.1",
+    "vite": "^7.2.4",
+    "vitest": "^4.1.10"
+  }
+}

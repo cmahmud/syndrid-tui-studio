@@ -1,0 +1,17 @@
+[package]
+name = "syndrid-tui-studio"
+version = "0.4.0"
+description = "A visual Ratatui design environment for Syndrid CLI"
+authors = ["Syndrid TUI Studio contributors"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "syndrid_tui_studio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }

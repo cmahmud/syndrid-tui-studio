@@ -1,0 +1,11 @@
+# Project-local Codex integration for Syndrid TUI Studio.
+# Codex loads project configuration for trusted projects.
+[mcp_servers.syndrid_tui_studio]
+command = "node"
+args = ["mcp-server/index.mjs"]
+cwd = "."
+enabled = true
+required = false
+default_tools_approval_mode = "writes"
+startup_timeout_sec = 10
+tool_timeout_sec = 60

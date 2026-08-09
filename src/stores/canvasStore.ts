@@ -1,0 +1,105 @@
+// Canvas/viewport state management
+
+import { create } from 'zustand';
+
+export type CanvasSizeMode = 'default' | 'responsive' | 'custom';
+
+interface CanvasState {
+  // Dimensions (in terminal columns/rows)
+  width: number;
+  height: number;
+  sizeMode: CanvasSizeMode;
+
+  // View
+  zoom: number; // 1.0 = 100%
+  panX: number;
+  panY: number;
+
+  // Grid
+  showGrid: boolean;
+  snapToGrid: boolean;
+  gridSize: number; // Cell size
+
+  // Preview
+  monochrome: boolean; // force no-color canvas rendering, to sanity-check layout/semantics
+
+  // Actions
+  setCanvasSize: (width: number, height: number) => void;
+  setSizeMode: (mode: CanvasSizeMode) => void;
+  setZoom: (zoom: number) => void;
+  setPan: (x: number, y: number) => void;
+  resetView: () => void;
+  toggleGrid: () => void;
+  toggleSnapToGrid: () => void;
+  setGridSize: (size: number) => void;
+  toggleMonochrome: () => void;
+}
+
+export const useCanvasStore = create<CanvasState>((set) => ({
+  // Initial state - default terminal size
+  width: 80,
+  height: 25,
+  sizeMode: 'default',
+  zoom: 1.0,
+  panX: 0,
+  panY: 0,
+  showGrid: true,
+  snapToGrid: false,
+  gridSize: 1,
+  monochrome: false,
+
+  // Set canvas size
+  setCanvasSize: (width, height) => {
+    set({
+      width: Math.max(10, Math.min(200, width)),
+      height: Math.max(10, Math.min(100, height)),
+    });
+  },
+
+  // Set size mode
+  setSizeMode: (mode) => {
+    set(() => {
+      if (mode === 'default') {
+        return { sizeMode: mode, width: 80, height: 25 };
+      }
+      return { sizeMode: mode };
+    });
+  },
+
+  // Set zoom
+  setZoom: (zoom) => {
+    set({
+      zoom: Math.max(0.25, Math.min(4, zoom)),
+    });
+  },
+
+  // Set pan
+  setPan: (x, y) => {
+    set({ panX: x, panY: y });
+  },
+
+  // Reset view
+  resetView: () => {
+    set({ zoom: 1.0, panX: 0, panY: 0 });
+  },
+
+  // Toggle grid
+  toggleGrid: () => {
+    set((state) => ({ showGrid: !state.showGrid }));
+  },
+
+  // Toggle snap to grid
+  toggleSnapToGrid: () => {
+    set((state) => ({ snapToGrid: !state.snapToGrid }));
+  },
+
+  // Set grid size
+  setGridSize: (size) => {
+    set({ gridSize: Math.max(1, size) });
+  },
+
+  // Toggle monochrome preview
+  toggleMonochrome: () => {
+    set((state) => ({ monochrome: !state.monochrome }));
+  },
+}));

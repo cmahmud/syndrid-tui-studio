@@ -1,0 +1,56 @@
+name: Release Windows Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify Syndrid extensions
+        run: npm run verify:syndrid
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build and publish Windows installer
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Syndrid TUI Studio ${{ github.ref_name }}'
+          releaseBody: |
+            Windows x64 release of Syndrid TUI Studio.
+
+            Download the `-setup.exe` asset below and run it to install the app.
+          generateReleaseNotes: true
+          releaseDraft: false
+          prerelease: false
+          retryAttempts: 2
+          args: '--bundles nsis'
+          releaseAssetNamePattern: 'Syndrid-TUI-Studio_[version]_[arch][setup][ext]'
+          uploadUpdaterJson: false

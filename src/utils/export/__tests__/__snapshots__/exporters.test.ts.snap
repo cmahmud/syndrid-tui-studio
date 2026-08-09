@@ -1,0 +1,1879 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`exportToCode snapshots > blessed: empty screen 1`] = `
+"const blessed = require('blessed');
+
+const screen = blessed.screen({
+  smartCSR: true,
+  title: "Screen",
+});
+
+
+
+screen.key(['escape', 'q', 'C-c'], () => process.exit(0));
+
+screen.render();
+"
+`;
+
+exports[`exportToCode snapshots > blessed: kitchen-sink tree 1`] = `
+"const blessed = require('blessed');
+
+const screen = blessed.screen({
+  smartCSR: true,
+  title: "Screen",
+});
+
+const header = blessed.box({
+  parent: screen,
+  top: 0,
+  left: 0,
+  width: 10,
+  height: 5,
+  border: { type: 'line' },
+  label: " Header ",
+  style: { border: { fg: "#414868" } },
+});
+
+const title = blessed.box({
+  parent: header,
+  top: 0,
+  left: 0,
+  width: 3,
+  height: 1,
+  content: "Say \\"hi\\" to <all>",
+  style: { fg: "#7dcfff", bold: true },
+});
+
+const nav = blessed.box({
+  parent: header,
+  top: 0,
+  left: 5,
+  width: 29,
+  height: 3,
+  content: "  Dashboard  {bold}[ Agent ]{/bold}",
+  tags: true,
+});
+
+const body = blessed.box({
+  parent: screen,
+  top: 5,
+  left: 0,
+  width: 10,
+  height: 5,
+});
+
+const files = blessed.list({
+  parent: body,
+  top: 0,
+  left: 0,
+  width: 2,
+  height: 3,
+  border: { type: 'line' },
+  label: " Files ",
+  mouse: true,
+  keys: true,
+  items: ["[x] • main.rs  1", "[ ] • lib.rs  2"],
+  selected: 0,
+  style: { border: { fg: "red" }, selected: { inverse: true } },
+});
+
+files.on("select", handleFileSelect);
+
+files.on("keypress", handleFzfKeys);
+
+const explorer = blessed.box({
+  parent: body,
+  top: 0,
+  left: 2,
+  width: 2,
+  height: 3,
+  content: "Root\\n  ├─ Child 1\\n  ├─ Child 2\\n    ├─ Nested",
+});
+
+const stats = blessed.listtable({
+  parent: body,
+  top: 0,
+  left: 4,
+  width: 2,
+  height: 3,
+  rows: [["PID", "CPU"], ["123", "45%"], ["456", "2%"]],
+  align: 'left',
+  keys: true,
+  mouse: true,
+  style: { header: { bold: true } },
+});
+
+stats.on("keypress", handleTableKeys);
+
+const nav2 = blessed.list({
+  parent: body,
+  top: 0,
+  left: 6,
+  width: 2,
+  height: 3,
+  mouse: true,
+  keys: true,
+  items: ["⌂ Home  ^H"],
+  selected: 0,
+  style: { selected: { inverse: true } },
+});
+
+const controls = blessed.box({
+  parent: screen,
+  top: 10,
+  left: 0,
+  width: 10,
+  height: 5,
+});
+
+const oK = blessed.button({
+  parent: controls,
+  top: 0,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: " OK ",
+  mouse: true,
+  keys: true,
+  style: { bold: true, inverse: true },
+});
+
+oK.on("press", handleOk);
+
+const oK2 = blessed.button({
+  parent: controls,
+  top: 3,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: " Cancel ",
+  mouse: true,
+  keys: true,
+  style: { fg: "red" },
+});
+
+const search = blessed.textbox({
+  parent: controls,
+  top: 6,
+  left: 0,
+  width: 10,
+  height: 1,
+  mouse: true,
+  keys: true,
+  inputOnFocus: true,
+  value: "",
+});
+
+search.on("submit", handleSearchChange);
+
+const notes = blessed.textarea({
+  parent: controls,
+  top: 9,
+  left: 0,
+  width: 10,
+  height: 3,
+  mouse: true,
+  keys: true,
+  inputOnFocus: true,
+  scrollable: true,
+  value: "Line one\\nLine two",
+});
+
+notes.on("submit", handleNotesChange);
+
+const opt = blessed.checkbox({
+  parent: controls,
+  top: 12,
+  left: 0,
+  width: 10,
+  height: 1,
+  mouse: true,
+  checked: true,
+  text: "Enable",
+});
+
+opt.on("check", handleOptChange);
+
+opt.on("uncheck", handleOptChange);
+
+const r1 = blessed.radiobutton({
+  parent: controls,
+  top: 15,
+  left: 0,
+  width: 10,
+  height: 1,
+  mouse: true,
+  checked: true,
+  text: "Choice A",
+});
+
+r1.on("check", handleR1Change);
+
+r1.on("uncheck", handleR1Change);
+
+const dark = blessed.box({
+  parent: controls,
+  top: 18,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "[ON ] Dark mode",
+});
+
+const sel = blessed.box({
+  parent: controls,
+  top: 21,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "Two ▼",
+});
+
+const load = blessed.box({
+  parent: controls,
+  top: 24,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "[====] Working",
+});
+
+const prog = blessed.box({
+  parent: controls,
+  top: 27,
+  left: 0,
+  width: 24,
+  height: 1,
+  content: "[==========>      ] 67%",
+});
+
+const cPU = blessed.box({
+  parent: controls,
+  top: 30,
+  left: 0,
+  width: 24,
+  height: 1,
+  content: "████████CPU 42%░░░░░░░░░",
+});
+
+const trend = blessed.box({
+  parent: controls,
+  top: 33,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "▁▂▂▄▃▆▅▇▆█",
+});
+
+const output = blessed.log({
+  parent: controls,
+  top: 36,
+  left: 0,
+  width: 20,
+  height: 3,
+  content: "Starting up...\\nConnected\\n200 OK",
+  scrollable: true,
+  alwaysScroll: true,
+});
+
+const footer = blessed.box({
+  parent: controls,
+  top: 39,
+  left: 0,
+  width: 10,
+  height: 3,
+  content: "^Q Quit  ^S Save",
+});
+
+const crumb = blessed.box({
+  parent: controls,
+  top: 42,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "Home / Docs",
+});
+
+const notice = blessed.box({
+  parent: controls,
+  top: 45,
+  left: 0,
+  width: 10,
+  height: 3,
+  content: "✓ Saved successfully",
+});
+
+const div = blessed.line({
+  parent: controls,
+  top: 51,
+  left: 0,
+  width: 10,
+  height: 3,
+  orientation: "horizontal",
+  type: 'bg',
+  ch: "═",
+});
+
+const empty = blessed.box({
+  parent: screen,
+  top: 15,
+  left: 0,
+  width: 10,
+  height: 5,
+  border: { type: 'line' },
+  label: " Empty ",
+});
+
+const confirm = blessed.box({
+  parent: screen,
+  top: 20,
+  left: 0,
+  width: 10,
+  height: 5,
+  border: { type: 'line' },
+  label: " Confirm ",
+  style: { border: { fg: "red" } },
+});
+
+const msg = blessed.box({
+  parent: confirm,
+  top: -1,
+  left: -1,
+  width: 10,
+  height: 1,
+  content: "Sure?",
+});
+
+screen.key(['escape', 'q', 'C-c'], () => process.exit(0));
+
+screen.render();
+
+function handleFileSelect() {
+  // TODO: implement
+}
+
+function handleFzfKeys() {
+  // TODO: implement
+}
+
+function handleNotesChange() {
+  // TODO: implement
+}
+
+function handleOk() {
+  // TODO: implement
+}
+
+function handleOptChange() {
+  // TODO: implement
+}
+
+function handleR1Change() {
+  // TODO: implement
+}
+
+function handleSearchChange() {
+  // TODO: implement
+}
+
+function handleTableKeys() {
+  // TODO: implement
+}
+"
+`;
+
+exports[`exportToCode snapshots > blessed: text-only tree 1`] = `
+"const blessed = require('blessed');
+
+const screen = blessed.screen({
+  smartCSR: true,
+  title: "Screen",
+});
+
+const title = blessed.box({
+  parent: screen,
+  top: 0,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "Hello",
+});
+
+screen.key(['escape', 'q', 'C-c'], () => process.exit(0));
+
+screen.render();
+"
+`;
+
+exports[`exportToCode snapshots > bubbletea: empty screen 1`] = `
+"package main
+
+import (
+	"fmt"
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type model struct{}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" || msg.String() == "q" {
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m model) View() string {
+	return ""
+}
+
+func main() {
+	p := tea.NewProgram(model{}, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Println("Error:", err)
+		os.Exit(1)
+	}
+}
+"
+`;
+
+exports[`exportToCode snapshots > bubbletea: kitchen-sink tree 1`] = `
+"// NOT exported (unsupported in a static view):
+//   - Modal "Confirm" — no overlay support; build with tea.Model state + lipgloss.Place
+
+package main
+
+import (
+	"fmt"
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type model struct{}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" || msg.String() == "q" {
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m model) View() string {
+	nav := lipgloss.JoinHorizontal(lipgloss.Top, " Dashboard ", lipgloss.NewStyle().Bold(true).Underline(true).Render(" Agent "))
+	header := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("#414868")).Padding(1).Render(lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Foreground(lipgloss.Color("#7dcfff")).Bold(true).Render("Say \\"hi\\" to <all>"), "  ", nav))
+	// onSelect ("handleFileSelect") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onKeyPress ("handleFzfKeys") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onKeyPress ("handleTableKeys") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	body := lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("1")).Render("▶ [x] • main.rs  1\\n  [ ] • lib.rs  2"), "Root\\n  ├─ Child 1\\n  ├─ Child 2\\n    ├─ Nested", "PID            │ CPU           \\n───────────────┼───────────────\\n123            │ 45%           \\n456            │ 2%            ", "  ⌂ Home  ^H")
+	// onClick ("handleOk") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onChange ("handleSearchChange") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onChange ("handleNotesChange") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onChange ("handleOptChange") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onChange ("handleR1Change") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onChange ("handleDarkChange") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	// onChange ("handleSelChange") not wired: this is a static View(), rebuild with a real tea.Model/Update() to handle it
+	controls := lipgloss.JoinVertical(lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Bold(true).Reverse(true).Render(" OK "), lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(lipgloss.Color("1")).Render(" Cancel ")), lipgloss.JoinHorizontal(lipgloss.Top, "type \\"here\\"..._", lipgloss.NewStyle().Height(3).Render("Line one\\nLine two\\n")), lipgloss.JoinHorizontal(lipgloss.Top, "[✓] Enable", "(●) Choice A"), lipgloss.JoinHorizontal(lipgloss.Top, "[ON ] Dark mode", "Two ▼"), lipgloss.JoinHorizontal(lipgloss.Top, "[====] Working", "[==========>      ] 67%"), lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Width(24).Render("████████CPU 42%░░░░░░░░░"), lipgloss.NewStyle().Width(10).Render("▁▂▂▄▃▆▅▇▆█")), lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Width(20).Height(3).Render("Starting up...\\nConnected\\n200 OK"), "^Q Quit  ^S Save"), lipgloss.JoinHorizontal(lipgloss.Top, "Home / Docs", "✓ Saved successfully"), lipgloss.JoinHorizontal(lipgloss.Top, "", "════════════════════"))
+	empty := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render("")
+	screen := lipgloss.JoinVertical(lipgloss.Left, header, body, controls, empty)
+	return screen
+}
+
+func main() {
+	p := tea.NewProgram(model{}, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Println("Error:", err)
+		os.Exit(1)
+	}
+}
+"
+`;
+
+exports[`exportToCode snapshots > bubbletea: text-only tree 1`] = `
+"package main
+
+import (
+	"fmt"
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type model struct{}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" || msg.String() == "q" {
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m model) View() string {
+	screen := "Hello"
+	return screen
+}
+
+func main() {
+	p := tea.NewProgram(model{}, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Println("Error:", err)
+		os.Exit(1)
+	}
+}
+"
+`;
+
+exports[`exportToCode snapshots > ink: empty screen 1`] = `
+"import React from 'react';
+import { render, Box, Text } from 'ink';
+
+function App() {
+  return (
+    <Box />
+  );
+}
+
+render(<App />);
+"
+`;
+
+exports[`exportToCode snapshots > ink: kitchen-sink tree 1`] = `
+"import React from 'react';
+import { render, Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import SelectInput from 'ink-select-input';
+import Spinner from 'ink-spinner';
+
+function App() {
+  return (
+    <Box>
+      <Box flexDirection="row" gap={2} padding={1} borderStyle="single" borderColor="#414868">
+        <Text color="#7dcfff" bold>Say "hi" to &lt;all&gt;</Text>
+        <Box flexDirection="row">
+          <Text key={"Dashboard"} underline> Dashboard </Text>
+          <Text key={"Agent"} underline> Agent </Text>
+        </Box>
+      </Box>
+      <Box flexDirection="row">
+        {/* onSelect ("handleFileSelect") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        {/* onKeyPress ("handleFzfKeys") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Box borderStyle="single" borderColor="red" flexDirection="column">
+          <Text key={"main.rs-0"}>[x] • main.rs</Text>
+          <Text key={"lib.rs-1"}>[ ] • lib.rs</Text>
+        </Box>
+        <Box flexDirection="column">
+          <Text key={"Root"}>{"Root"}</Text>
+          <Text key={"  ├─ Child 1"}>{"  ├─ Child 1"}</Text>
+          <Text key={"  ├─ Child 2"}>{"  ├─ Child 2"}</Text>
+          <Text key={"    ├─ Nested"}>{"    ├─ Nested"}</Text>
+        </Box>
+        {/* onKeyPress ("handleTableKeys") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Box flexDirection="column">
+          <Text key={0}>{"PID            │ CPU           "}</Text>
+          <Text key={1}>{"───────────────┼───────────────"}</Text>
+          <Text key={2}>{"123            │ 45%           "}</Text>
+          <Text key={3}>{"456            │ 2%            "}</Text>
+        </Box>
+        <Box flexDirection="column" gap={1}>
+          <Text key={"Home"}>⌂ Home</Text>
+        </Box>
+      </Box>
+      <Box>
+        {/* onClick ("handleOk") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Text bold inverse>  OK  </Text>
+        <Text color="red" bold inverse>  Cancel  </Text>
+        <TextInput value={""} placeholder={"type \\"here\\"..."} onChange={() => handleSearchChange()} />
+        {/* onChange ("handleNotesChange") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Box flexDirection="column">
+          <Text key={0}>Line one</Text>
+          <Text key={1}>Line two</Text>
+          <Text key={2}></Text>
+        </Box>
+        {/* onChange ("handleOptChange") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Text>{/* checked={true} */} ✓ Enable</Text>
+        {/* onChange ("handleR1Change") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Text>{/* selected={true} */} ◉ Choice A</Text>
+        {/* onChange ("handleDarkChange") not wired — no prop for this on a plain <Text>/<Box>; see useInput for real keyboard handling */}
+        <Text>{/* on={true} */} {true ? '[ON ]' : '[OFF]'} Dark mode</Text>
+        <SelectInput items={[{ label: "One", value: "one" }, { label: "Two", value: "two" }]} onSelect={() => handleSelChange()} />
+        <Text><Spinner type="bouncingBar" /> Working</Text>
+        <Text>
+          {"["}{'='.repeat(Math.round(67 / 100 * 24))}{' '.repeat(24 - Math.round(67 / 100 * 24))}{"]"} 67%
+        </Text>
+        <Text>{"████████CPU 42%░░░░░░░░░"}</Text>
+        <Text>{"▁▂▂▄▃▆▅▇▆█"}</Text>
+        <Box flexDirection="column">
+          <Text key={0}>Starting up...</Text>
+          <Text key={1}>Connected</Text>
+          <Text key={2}>200 OK</Text>
+        </Box>
+        <Text>{"^Q Quit  ^S Save"}</Text>
+        <Text>{"Home  /  Docs"}</Text>
+        <Text>{"✓ Saved successfully"}</Text>
+        <Box flexGrow={1} />
+        <Text>{"════════════════════"}</Text>
+      </Box>
+      <Box borderStyle="single" />
+      <Box borderStyle="double" borderColor="red">
+        <Text>Sure?</Text>
+      </Box>
+    </Box>
+  );
+}
+
+render(<App />);
+
+// Install extra packages:
+// npm install ink-text-input ink-select-input ink-spinner
+"
+`;
+
+exports[`exportToCode snapshots > ink: text-only tree 1`] = `
+"import React from 'react';
+import { render, Box, Text } from 'ink';
+
+function App() {
+  return (
+    <Box>
+      <Text>Hello</Text>
+    </Box>
+  );
+}
+
+render(<App />);
+"
+`;
+
+exports[`exportToCode snapshots > opentui: empty screen 1`] = `
+"import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
+
+function App() {
+  return (
+    <box />
+  );
+}
+
+const renderer = await createCliRenderer();
+createRoot(renderer).render(<App />);
+"
+`;
+
+exports[`exportToCode snapshots > opentui: kitchen-sink tree 1`] = `
+"import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
+
+function App() {
+  return (
+    <box style={{ flexDirection: "column" }}>
+      <box border borderStyle="rounded" title={" Header "} style={{ flexDirection: "row", gap: 2, padding: 1, borderColor: "#414868" }}>
+        <text fg={"#7dcfff"}><strong>Say "hi" to &lt;all&gt;</strong></text>
+        <tab-select options={[{ name: "Dashboard", description: "", value: "dashboard" }, { name: "Agent", description: "", value: "agent" }]} />
+      </box>
+      <box style={{ flexDirection: "row", flexGrow: 1 }}>
+        {/* onSelect ("handleFileSelect") not wired — no documented prop for this at the React-bindings layer */}
+        {/* onKeyPress ("handleFzfKeys") not wired — no documented prop for this at the React-bindings layer */}
+        <box border title={" Files "} style={{ borderColor: "red" }}>
+          <text>▶ [x] • main.rs  1</text>
+          <text>  [ ] • lib.rs  2</text>
+        </box>
+        <box>
+          <text>Root</text>
+          <text>  ├─ Child 1</text>
+          <text>  ├─ Child 2</text>
+          <text>    ├─ Nested</text>
+        </box>
+        {/* onKeyPress ("handleTableKeys") not wired — no documented prop for this at the React-bindings layer */}
+        <box>
+          <text>PID            │ CPU           </text>
+          <text>───────────────┼───────────────</text>
+          <text>123            │ 45%           </text>
+          <text>456            │ 2%            </text>
+        </box>
+        <box>
+          <text>  ⌂ Home  ^H</text>
+        </box>
+      </box>
+      <box style={{ flexDirection: "column" }}>
+        <box style={{ flexDirection: "row" }}>
+          {/* onClick ("handleOk") not wired — no documented prop for this at the React-bindings layer */}
+          <box border borderStyle="single">
+            <text><strong> OK </strong></text>
+          </box>
+          <box border borderStyle="single">
+            <text fg={"red"}><strong> Cancel </strong></text>
+          </box>
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          <input placeholder={"type \\"here\\"..."} onInput={() => handleSearchChange()} />
+          {/* onChange ("handleNotesChange") not wired — no documented prop for this at the React-bindings layer */}
+          <textarea placeholder={"Enter notes..."} />
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          {/* onChange ("handleOptChange") not wired — no documented prop for this at the React-bindings layer */}
+          <text>[✓] Enable</text>
+          {/* onChange ("handleR1Change") not wired — no documented prop for this at the React-bindings layer */}
+          <text>(●) Choice A</text>
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          {/* onChange ("handleDarkChange") not wired — no documented prop for this at the React-bindings layer */}
+          <text>[ON ] Dark mode</text>
+          {/* onChange ("handleSelChange") not wired — no documented prop for this at the React-bindings layer */}
+          <select options={[{ name: "One", description: "", value: "one" }, { name: "Two", description: "", value: "two" }]} />
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          <text>[====] Working</text>
+          <text>[==========&gt;      ] 67%</text>
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          <text>████████CPU 42%░░░░░░░░░</text>
+          <text>▁▂▂▄▃▆▅▇▆█</text>
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          <scrollbox style={{ width: 20, height: 3 }}>
+            <text>Starting up...</text>
+            <text>Connected</text>
+            <text>200 OK</text>
+          </scrollbox>
+          <text>^Q Quit  ^S Save</text>
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          <text>Home / Docs</text>
+          <text>✓ Saved successfully</text>
+        </box>
+        <box style={{ flexDirection: "row" }}>
+          <box style={{ flexGrow: 1 }} />
+          <text>════════════════════</text>
+        </box>
+      </box>
+      <box border title={" Empty "} />
+      {/* Modal: render conditionally on top */}
+      <box border borderStyle="double" title={" Confirm "} style={{ borderColor: "red" }}>
+        <text>Sure?</text>
+      </box>
+    </box>
+  );
+}
+
+const renderer = await createCliRenderer();
+createRoot(renderer).render(<App />);
+"
+`;
+
+exports[`exportToCode snapshots > opentui: text-only tree 1`] = `
+"import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
+
+function App() {
+  return (
+    <box>
+      <text>Hello</text>
+    </box>
+  );
+}
+
+const renderer = await createCliRenderer();
+createRoot(renderer).render(<App />);
+"
+`;
+
+exports[`exportToCode snapshots > ratatui: empty screen 1`] = `
+"// Requires: ratatui = "0.28"
+// Add to Cargo.toml: [dependencies] ratatui = { version = "0.28", features = ["crossterm"] }
+use std::io;
+use ratatui::{
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Block, BorderType, Borders, Paragraph},
+    Frame,
+};
+
+fn main() -> io::Result<()> {
+    let mut terminal = ratatui::init();
+    loop {
+        terminal.draw(ui)?;
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+    ratatui::restore();
+    Ok(())
+}
+
+fn ui(frame: &mut Frame) {
+    let area = frame.area();
+
+}
+"
+`;
+
+exports[`exportToCode snapshots > ratatui: kitchen-sink tree 1`] = `
+"// Requires: ratatui = "0.28"
+// Add to Cargo.toml: [dependencies] ratatui = { version = "0.28", features = ["crossterm"] }
+use std::io;
+use ratatui::{
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::Line,
+    widgets::{Block, BorderType, Borders, Gauge, List, ListItem, Paragraph, Row, Sparkline, Table, Tabs},
+    Frame,
+};
+
+fn main() -> io::Result<()> {
+    let mut terminal = ratatui::init();
+    let mut focus_index: usize = 0;
+    loop {
+        terminal.draw(ui)?;
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Tab => { focus_index = (focus_index + 1) % 12; },
+                    KeyCode::BackTab => { focus_index = (focus_index + 12 - 1) % 12; },
+                    _ => {
+                match focus_index {
+                    0 => {}, // Nav
+                    1 => handleFzfKeys(), // Files
+                    2 => {}, // Explorer
+                    3 => handleTableKeys(), // Stats
+                    4 => {}, // Nav2
+                    5 => {}, // OK
+                    6 => {}, // OK
+                    7 => {}, // Search
+                    8 => {}, // Notes
+                    9 => {}, // Opt
+                    10 => {}, // R1
+                    11 => {}, // Sel
+                    _ => {}
+                }
+                    }
+                }
+            }
+        }
+    }
+    ratatui::restore();
+    Ok(())
+}
+
+fn ui(frame: &mut Frame) {
+    let area = frame.area();
+    let chunks_area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Min(1), Constraint::Min(1), Constraint::Min(1), Constraint::Min(1)])
+        .split(area);
+        let block_chunks_area_0_ = Block::new().borders(Borders::ALL).border_type(BorderType::Rounded).title("Header").border_style(Style::default().fg(Color::Rgb(65, 72, 104)));
+        let inner_chunks_area_0_ = block_chunks_area_0_.inner(chunks_area[0]);
+        frame.render_widget(block_chunks_area_0_, chunks_area[0]);
+        let chunks_inner_chunks_area_0_ = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(1), Constraint::Min(1)])
+            .spacing(2)
+            .split(inner_chunks_area_0_);
+            frame.render_widget(Paragraph::new("Say \\"hi\\" to <all>").style(Style::default().fg(Color::Rgb(125, 207, 255)).add_modifier(Modifier::BOLD)), chunks_inner_chunks_area_0_[0]);
+            frame.render_widget(Tabs::new(vec!["Dashboard", "Agent"]).select(1).style(Style::default()).highlight_style(Style::default().add_modifier(Modifier::BOLD)), chunks_inner_chunks_area_0_[1]);
+        let chunks_chunks_area_1_ = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(1), Constraint::Min(1), Constraint::Min(1), Constraint::Min(1)])
+            .split(chunks_area[1]);
+            frame.render_widget(List::new(vec![ListItem::new("▶ [x] • main.rs  1"), ListItem::new("  [ ] • lib.rs  2")]).style(Style::default()).block(Block::new().borders(Borders::ALL).border_type(BorderType::Plain).title("Files").border_style(Style::default().fg(Color::Red))), chunks_chunks_area_1_[0]);
+            frame.render_widget(List::new(vec![ListItem::new("▾ Root"), ListItem::new("  ├─ Child 1"), ListItem::new("  ├─ ▸ Child 2")]).style(Style::default()), chunks_chunks_area_1_[1]);
+            frame.render_widget(Table::new(vec![Row::new(vec!["123", "45%"]), Row::new(vec!["456", "2%"])], [Constraint::Fill(1), Constraint::Fill(1)]).header(Row::new(vec!["PID", "CPU"]).style(Style::default().add_modifier(Modifier::BOLD))).style(Style::default()), chunks_chunks_area_1_[2]);
+            frame.render_widget(List::new(vec![ListItem::new("▶ ⌂ Home  ^H")]).style(Style::default()), chunks_chunks_area_1_[3]);
+        let grid_rows_chunks_area_2_ = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1), Constraint::Fill(1)])
+            .split(chunks_area[2]);
+        let grid_cols_chunks_area_2__0 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[0]);
+            frame.render_widget(Paragraph::new("OK").alignment(Alignment::Center).style(Style::default()).block(Block::new()), grid_cols_chunks_area_2__0[0]);
+            frame.render_widget(Paragraph::new("Cancel").alignment(Alignment::Center).style(Style::default().fg(Color::Red)).block(Block::new()), grid_cols_chunks_area_2__0[1]);
+        let grid_cols_chunks_area_2__1 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[1]);
+            frame.render_widget(Paragraph::new("type \\"here\\"..._").style(Style::default()), grid_cols_chunks_area_2__1[0]);
+            frame.render_widget(Paragraph::new(vec![Line::from("Line one"), Line::from("Line two"), Line::from("")]).style(Style::default()), grid_cols_chunks_area_2__1[1]);
+        let grid_cols_chunks_area_2__2 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[2]);
+            frame.render_widget(Paragraph::new("[✓] Enable").style(Style::default()), grid_cols_chunks_area_2__2[0]);
+            frame.render_widget(Paragraph::new("(●) Choice A").style(Style::default()), grid_cols_chunks_area_2__2[1]);
+        let grid_cols_chunks_area_2__3 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[3]);
+            frame.render_widget(Paragraph::new("[OFF] Dark mode").style(Style::default()), grid_cols_chunks_area_2__3[0]);
+            frame.render_widget(Paragraph::new("Two ▼").style(Style::default()), grid_cols_chunks_area_2__3[1]);
+        let grid_cols_chunks_area_2__4 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[4]);
+            frame.render_widget(Paragraph::new("[====] Working").style(Style::default()), grid_cols_chunks_area_2__4[0]);
+            frame.render_widget(Gauge::default().ratio(0.670).style(Style::default()), grid_cols_chunks_area_2__4[1]);
+        let grid_cols_chunks_area_2__5 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[5]);
+            frame.render_widget(Gauge::default().ratio(0.420).label("CPU 42%").style(Style::default()), grid_cols_chunks_area_2__5[0]);
+            frame.render_widget(Sparkline::default().data(&[1, 3, 2, 5, 4, 8, 6, 9, 7, 10]).style(Style::default()), grid_cols_chunks_area_2__5[1]);
+        let grid_cols_chunks_area_2__6 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[6]);
+            frame.render_widget(Paragraph::new(vec![Line::from("Starting up..."), Line::from("Connected"), Line::from("200 OK")]).style(Style::default()), grid_cols_chunks_area_2__6[0]);
+            frame.render_widget(Paragraph::new("^Q Quit  ^S Save").style(Style::default()), grid_cols_chunks_area_2__6[1]);
+        let grid_cols_chunks_area_2__7 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[7]);
+            frame.render_widget(Paragraph::new("Home / Docs").style(Style::default()), grid_cols_chunks_area_2__7[0]);
+            frame.render_widget(Paragraph::new("✓ Saved successfully").style(Style::default()), grid_cols_chunks_area_2__7[1]);
+        let grid_cols_chunks_area_2__8 = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+            .split(grid_rows_chunks_area_2_[8]);
+            frame.render_widget(Paragraph::new("═".repeat(grid_cols_chunks_area_2__8[1].width as usize)).style(Style::default()), grid_cols_chunks_area_2__8[1]);
+        let block_chunks_area_3_ = Block::new().borders(Borders::ALL).border_type(BorderType::Plain).title("Empty");
+        let inner_chunks_area_3_ = block_chunks_area_3_.inner(chunks_area[3]);
+        frame.render_widget(block_chunks_area_3_, chunks_area[3]);
+        let modal_chunks_area_4_ = Rect::new(
+            chunks_area[4].x.saturating_add((chunks_area[4].width.saturating_sub(40)) / 2),
+            chunks_area[4].y.saturating_add((chunks_area[4].height.saturating_sub(12)) / 2),
+            40,
+            12,
+        );
+        let block_modal_chunks_area_4_ = Block::new().borders(Borders::ALL).border_type(BorderType::Double).title("Confirm").border_style(Style::default().fg(Color::Red));
+        let inner_modal_chunks_area_4_ = block_modal_chunks_area_4_.inner(modal_chunks_area_4_);
+        frame.render_widget(block_modal_chunks_area_4_, modal_chunks_area_4_);
+        let chunks_inner_modal_chunks_area_4_ = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1)])
+            .split(inner_modal_chunks_area_4_);
+            frame.render_widget(Paragraph::new("Sure?").style(Style::default()), chunks_inner_modal_chunks_area_4_[0]);
+
+}
+
+fn handleFzfKeys() {
+    // TODO: implement focused key action
+}
+
+fn handleTableKeys() {
+    // TODO: implement focused key action
+}
+"
+`;
+
+exports[`exportToCode snapshots > ratatui: text-only tree 1`] = `
+"// Requires: ratatui = "0.28"
+// Add to Cargo.toml: [dependencies] ratatui = { version = "0.28", features = ["crossterm"] }
+use std::io;
+use ratatui::{
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Block, BorderType, Borders, Paragraph},
+    Frame,
+};
+
+fn main() -> io::Result<()> {
+    let mut terminal = ratatui::init();
+    loop {
+        terminal.draw(ui)?;
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+    ratatui::restore();
+    Ok(())
+}
+
+fn ui(frame: &mut Frame) {
+    let area = frame.area();
+    let chunks_area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1)])
+        .split(area);
+        frame.render_widget(Paragraph::new("Hello").style(Style::default()), chunks_area[0]);
+
+}
+"
+`;
+
+exports[`exportToCode snapshots > textual: empty screen 1`] = `
+"from textual.app import App, ComposeResult
+from textual.widgets import Static
+
+
+class MyApp(App):
+    def compose(self) -> ComposeResult:
+        yield Static("")
+
+
+if __name__ == "__main__":
+    MyApp().run()
+"
+`;
+
+exports[`exportToCode snapshots > textual: kitchen-sink tree 1`] = `
+"from textual.app import App, ComposeResult
+from textual import events
+from textual.containers import Grid, Horizontal, Vertical
+from textual.screen import ModalScreen
+from textual.widgets import Button, Checkbox, DataTable, Footer, Input, LoadingIndicator, OptionList, ProgressBar, RadioButton, RichLog, Rule, Select, SelectionList, Sparkline, Static, Switch, Tabs, TextArea, Tree
+
+
+class ConfirmModal(ModalScreen):
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm"):
+            yield Static("Sure?")
+
+
+class MyApp(App):
+    BINDINGS = [
+        ("ctrl+q", "quit", "Quit"),
+        ("ctrl+s", "save", "Save"),
+    ]
+
+    CSS = """
+    #header {
+        border: round #414868;
+        padding: 1;
+    }
+
+    #header > * {
+        margin-right: 2;
+    }
+
+    #title {
+        color: #7dcfff;
+        text-style: bold;
+    }
+
+    #body {
+        width: 1fr;
+    }
+
+    #files {
+        border: solid ansi_red;
+    }
+
+    #controls {
+        grid-size: 2 9;
+    }
+
+    #ok {
+        color: ansi_red;
+    }
+
+    #notes {
+        height: 3;
+    }
+
+    #prog {
+        width: 24;
+    }
+
+    #cpu {
+        width: 24;
+    }
+
+    #trend {
+        width: 10;
+    }
+
+    #output {
+        width: 20;
+        height: 3;
+    }
+
+    #empty {
+        border: solid ansi_white;
+    }
+
+    #confirm {
+        width: auto;
+        height: auto;
+        border: double ansi_red;
+    }
+
+    ConfirmModal {
+        align: center middle;
+    }
+
+    .spacer {
+        width: 1fr;
+        height: 1fr;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(id="header"):
+            yield Static("Say \\"hi\\" to <all>", id="title")
+            yield Tabs("Dashboard", "Agent", id="nav")
+        with Horizontal(id="body"):
+            yield SelectionList(("main.rs", 0, True), ("lib.rs", 1, False), id="files")
+            yield Tree("Explorer", id="explorer")
+            yield DataTable(id="stats")
+            yield OptionList("⌂ Home")
+        with Grid(id="controls"):
+            yield Button("OK")
+            yield Button("Cancel", id="ok")
+            yield Input(placeholder="type \\"here\\"...")
+            yield TextArea("Line one\\nLine two", placeholder="Enter notes...", id="notes")
+            yield Checkbox("Enable", value=True)
+            yield RadioButton("Choice A", value=True)
+            with Horizontal():
+                yield Static("Dark mode")
+                yield Switch(value=True)
+            yield Select([("One", 0), ("Two", 1)], allow_blank=False, value=1)
+            yield LoadingIndicator()
+            yield ProgressBar(total=100, show_eta=False, id="prog")
+            with Horizontal():
+                yield Static("CPU")
+                yield ProgressBar(total=100, show_eta=False, id="cpu")
+            yield Sparkline([1, 3, 2, 5, 4, 8, 6, 9, 7, 10], summary_function=max, id="trend")
+            yield RichLog(id="output")
+            yield Footer()
+            yield Static("Home / Docs")
+            yield Static("", classes="spacer")
+            yield Rule.horizontal(line_style="double")
+        with Vertical(id="empty"):
+            pass
+
+    def on_mount(self) -> None:
+        self.query_one("#nav", Tabs).active = "tab-2"
+        tree_explorer = self.query_one("#explorer", Tree)
+        tree_explorer.root.expand()
+        node_explorer_0_0 = tree_explorer.root.add("Root", expand=True)
+        node_explorer_0_0.add_leaf("Child 1")
+        node_explorer_1_1 = node_explorer_0_0.add("Child 2", expand=False)
+        node_explorer_1_1.add_leaf("Nested")
+        table_stats = self.query_one("#stats", DataTable)
+        table_stats.add_columns("PID", "CPU")
+        table_stats.add_rows([("123", "45%"), ("456", "2%")])
+        self.query_one("#prog", ProgressBar).update(total=100, progress=67)
+        self.query_one("#cpu", ProgressBar).update(total=100, progress=42)
+        self.query_one("#output", RichLog).write("Starting up...")
+        self.query_one("#output", RichLog).write("Connected")
+        self.query_one("#output", RichLog).write("200 OK")
+        self.notify("Saved successfully", severity="information")
+        self.push_screen(ConfirmModal())
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.handleOk()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self.handleSearchChange()
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        self.handleOptChange()
+
+    def on_radio_button_changed(self, event: RadioButton.Changed) -> None:
+        self.handleR1Change()
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        self.handleDarkChange()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        self.handleSelChange()
+
+    def on_selection_list_selected_changed(self, event: SelectionList.SelectedChanged) -> None:
+        self.handleFileSelect()
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        self.handleNotesChange()
+
+    def on_key(self, event: events.Key) -> None:
+        self.handleFzfKeys()
+        self.handleTableKeys()
+
+    def handleDarkChange(self) -> None:
+        pass  # TODO: implement
+
+    def handleFileSelect(self) -> None:
+        pass  # TODO: implement
+
+    def handleFzfKeys(self) -> None:
+        pass  # TODO: implement
+
+    def handleNotesChange(self) -> None:
+        pass  # TODO: implement
+
+    def handleOk(self) -> None:
+        pass  # TODO: implement
+
+    def handleOptChange(self) -> None:
+        pass  # TODO: implement
+
+    def handleR1Change(self) -> None:
+        pass  # TODO: implement
+
+    def handleSearchChange(self) -> None:
+        pass  # TODO: implement
+
+    def handleSelChange(self) -> None:
+        pass  # TODO: implement
+
+    def handleTableKeys(self) -> None:
+        pass  # TODO: implement
+
+
+if __name__ == "__main__":
+    MyApp().run()
+"
+`;
+
+exports[`exportToCode snapshots > textual: text-only tree 1`] = `
+"from textual.app import App, ComposeResult
+from textual.widgets import Static
+
+
+class MyApp(App):
+    def compose(self) -> ComposeResult:
+        yield Static("Hello")
+
+
+if __name__ == "__main__":
+    MyApp().run()
+"
+`;
+
+exports[`exportToCode snapshots > tview: empty screen 1`] = `
+"package main
+
+import (
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+func main() {
+	app := tview.NewApplication()
+
+	root := tview.NewFlex()
+	root.SetDirection(tview.FlexRow)
+
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Rune() == 'q' {
+			app.Stop()
+		}
+		return event
+	})
+
+	if err := app.SetRoot(root, true).Run(); err != nil {
+		panic(err)
+	}
+}
+"
+`;
+
+exports[`exportToCode snapshots > tview: kitchen-sink tree 1`] = `
+"package main
+
+import (
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+func main() {
+	app := tview.NewApplication()
+
+	root := tview.NewFlex()
+	root.SetDirection(tview.FlexRow)
+	header := tview.NewFlex()
+	header.SetDirection(tview.FlexColumn)
+	title := tview.NewTextView()
+	title.SetText(tview.Escape("Say \\"hi\\" to <all>"))
+	title.SetTextColor(tcell.GetColor("#7dcfff"))
+	header.AddItem(title, 0, 1, false)
+	nav := tview.NewTextView()
+	nav.SetText(tview.Escape("  Dashboard  [ Agent ]")) // static preview; build real tabs with a Flex of Buttons + tview.Pages
+	header.AddItem(tview.NewBox(), 2, 0, false)
+	header.AddItem(nav, 0, 1, false)
+	header.SetBorder(true)
+	header.SetBorderColor(tcell.GetColor("#414868"))
+	header.SetTitle(tview.Escape(" Header "))
+	root.AddItem(header, 0, 1, false)
+	body := tview.NewFlex()
+	body.SetDirection(tview.FlexColumn)
+	files := tview.NewList()
+	files.ShowSecondaryText(false)
+	files.AddItem(tview.Escape("[x] • main.rs  1"), "", 0, nil)
+	files.AddItem(tview.Escape("[ ] • lib.rs  2"), "", 0, nil)
+	files.SetCurrentItem(0)
+	files.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) { handleFileSelect() })
+	files.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey { handleFzfKeys(); return event })
+	files.SetBorder(true)
+	files.SetBorderColor(tcell.GetColor("red"))
+	files.SetTitle(tview.Escape(" Files "))
+	body.AddItem(files, 0, 1, false)
+	explorerNode := tview.NewTreeNode(tview.Escape("Root"))
+	explorerNode.SetExpanded(true)
+	explorerNode2 := tview.NewTreeNode(tview.Escape("Child 1"))
+	explorerNode2.SetExpanded(false)
+	explorerNode.AddChild(explorerNode2)
+	explorerNode3 := tview.NewTreeNode(tview.Escape("Child 2"))
+	explorerNode3.SetExpanded(false)
+	explorerNode4 := tview.NewTreeNode(tview.Escape("Nested"))
+	explorerNode4.SetExpanded(false)
+	explorerNode3.AddChild(explorerNode4)
+	explorerNode.AddChild(explorerNode3)
+	explorer := tview.NewTreeView()
+	explorer.SetRoot(explorerNode)
+	explorer.SetCurrentNode(explorerNode)
+	body.AddItem(explorer, 0, 1, false)
+	stats := tview.NewTable()
+	stats.SetCell(0, 0, tview.NewTableCell(tview.Escape("PID")))
+	stats.SetCell(0, 1, tview.NewTableCell(tview.Escape("CPU")))
+	stats.SetCell(1, 0, tview.NewTableCell(tview.Escape("123")))
+	stats.SetCell(1, 1, tview.NewTableCell(tview.Escape("45%")))
+	stats.SetCell(2, 0, tview.NewTableCell(tview.Escape("456")))
+	stats.SetCell(2, 1, tview.NewTableCell(tview.Escape("2%")))
+	stats.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey { handleTableKeys(); return event })
+	body.AddItem(stats, 0, 1, false)
+	nav2 := tview.NewList()
+	nav2.ShowSecondaryText(false)
+	nav2.AddItem(tview.Escape("⌂ Home  ^H"), "", 0, nil)
+	body.AddItem(nav2, 0, 1, false)
+	root.AddItem(body, 0, 1, false)
+	controls := tview.NewGrid()
+	controls.SetRows(0, 0, 0, 0, 0, 0, 0, 0, 0)
+	controls.SetColumns(0, 0)
+	oK := tview.NewButton(tview.Escape("OK"))
+	oK.SetSelectedFunc(handleOk)
+	controls.AddItem(oK, 0, 0, 1, 1, 0, 0, false)
+	oK2 := tview.NewButton(tview.Escape("Cancel"))
+	oK2.SetLabelColor(tcell.GetColor("red"))
+	controls.AddItem(oK2, 0, 1, 1, 1, 0, 0, false)
+	search := tview.NewInputField()
+	search.SetPlaceholder(tview.Escape("type \\"here\\"..."))
+	search.SetChangedFunc(func(text string) { handleSearchChange() })
+	controls.AddItem(search, 1, 0, 1, 1, 0, 0, false)
+	notes := tview.NewTextArea()
+	notes.SetPlaceholder(tview.Escape("Enter notes..."))
+	notes.SetText(tview.Escape("Line one\\nLine two"), false)
+	notes.SetChangedFunc(func() { handleNotesChange() })
+	controls.AddItem(notes, 1, 1, 1, 1, 0, 0, false)
+	opt := tview.NewCheckbox()
+	opt.SetLabel(tview.Escape("Enable "))
+	opt.SetChecked(true)
+	opt.SetCheckedString(tview.Escape("X"))
+	opt.SetUncheckedString(tview.Escape(" "))
+	opt.SetChangedFunc(func(checked bool) { handleOptChange() })
+	controls.AddItem(opt, 2, 0, 1, 1, 0, 0, false)
+	r1 := tview.NewCheckbox()
+	r1.SetLabel(tview.Escape("Choice A "))
+	r1.SetChecked(true)
+	r1.SetCheckedString(tview.Escape("●"))
+	r1.SetUncheckedString(tview.Escape("○"))
+	r1.SetChangedFunc(func(checked bool) { handleR1Change() })
+	controls.AddItem(r1, 2, 1, 1, 1, 0, 0, false)
+	dark := tview.NewCheckbox()
+	dark.SetLabel(tview.Escape("Dark mode "))
+	dark.SetChecked(true)
+	dark.SetCheckedString(tview.Escape(" ON "))
+	dark.SetUncheckedString(tview.Escape(" OFF "))
+	dark.SetChangedFunc(func(checked bool) { handleDarkChange() })
+	controls.AddItem(dark, 3, 0, 1, 1, 0, 0, false)
+	sel := tview.NewDropDown()
+	sel.SetOptions([]string{tview.Escape("One"), tview.Escape("Two")}, nil)
+	sel.SetCurrentOption(1)
+	sel.SetSelectedFunc(func(text string, index int) { handleSelChange() })
+	controls.AddItem(sel, 3, 1, 1, 1, 0, 0, false)
+	load := tview.NewTextView()
+	load.SetText(tview.Escape("[====] Working")) // static frame; drive with a time.Ticker + app.QueueUpdateDraw for a live spinner
+	controls.AddItem(load, 4, 0, 1, 1, 0, 0, false)
+	prog := tview.NewTextView()
+	prog.SetText(tview.Escape("[==========>      ] 67%")) // tview has no built-in progress bar; update this text as work completes
+	controls.AddItem(prog, 4, 1, 1, 1, 0, 0, false)
+	cPU := tview.NewTextView()
+	cPU.SetText(tview.Escape("████████CPU 42%░░░░░░░░░")) // tview has no built-in gauge; update this text as the value changes
+	controls.AddItem(cPU, 5, 0, 1, 1, 0, 0, false)
+	trend := tview.NewTextView()
+	trend.SetText(tview.Escape("▁▂▂▄▃▆▅▇▆█")) // tview has no built-in sparkline; update this text as data changes
+	controls.AddItem(trend, 5, 1, 1, 1, 0, 0, false)
+	output := tview.NewTextView()
+	output.SetScrollable(true)
+	output.SetText(tview.Escape("Starting up...\\nConnected\\n200 OK"))
+	output.ScrollToEnd()
+	controls.AddItem(output, 6, 0, 1, 1, 0, 0, false)
+	footer := tview.NewTextView()
+	footer.SetText(tview.Escape("^Q Quit  ^S Save"))
+	controls.AddItem(footer, 6, 1, 1, 1, 0, 0, false)
+	crumb := tview.NewTextView()
+	crumb.SetText(tview.Escape("Home / Docs"))
+	controls.AddItem(crumb, 7, 0, 1, 1, 0, 0, false)
+	notice := tview.NewTextView()
+	notice.SetText(tview.Escape("✓ Saved successfully"))
+	controls.AddItem(notice, 7, 1, 1, 1, 0, 0, false)
+	controls.AddItem(tview.NewBox(), 8, 0, 1, 1, 0, 0, false)
+	div := tview.NewTextView()
+	div.SetText(tview.Escape("════════════════════"))
+	controls.AddItem(div, 8, 1, 1, 1, 0, 0, false)
+	root.AddItem(controls, 0, 1, false)
+	empty := tview.NewFlex()
+	empty.SetDirection(tview.FlexRow)
+	empty.SetBorder(true)
+	empty.SetTitle(tview.Escape(" Empty "))
+	root.AddItem(empty, 0, 1, false)
+	confirm := tview.NewFlex()
+	confirm.SetDirection(tview.FlexRow)
+	msg := tview.NewTextView()
+	msg.SetText(tview.Escape("Sure?"))
+	confirm.AddItem(msg, 0, 1, false)
+	confirm.SetBorder(true)
+	confirm.SetBorderColor(tcell.GetColor("red"))
+	confirm.SetTitle(tview.Escape(" Confirm "))
+	confirmModal := tview.NewGrid()
+	confirmModal.SetRows(0, 12, 0)
+	confirmModal.SetColumns(0, 40, 0)
+	confirmModal.AddItem(confirm, 1, 1, 1, 1, 0, 0, false)
+	pages := tview.NewPages()
+	pages.AddPage("main", root, true, true)
+	pages.AddPage("modal-confirm", confirmModal, true, true)
+
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Rune() == 'q' {
+			app.Stop()
+		}
+		return event
+	})
+
+	if err := app.SetRoot(pages, true).Run(); err != nil {
+		panic(err)
+	}
+}
+
+func handleDarkChange() {
+	// TODO: implement
+}
+
+func handleFileSelect() {
+	// TODO: implement
+}
+
+func handleFzfKeys() {
+	// TODO: implement
+}
+
+func handleNotesChange() {
+	// TODO: implement
+}
+
+func handleOk() {
+	// TODO: implement
+}
+
+func handleOptChange() {
+	// TODO: implement
+}
+
+func handleR1Change() {
+	// TODO: implement
+}
+
+func handleSearchChange() {
+	// TODO: implement
+}
+
+func handleSelChange() {
+	// TODO: implement
+}
+
+func handleTableKeys() {
+	// TODO: implement
+}
+"
+`;
+
+exports[`exportToCode snapshots > tview: text-only tree 1`] = `
+"package main
+
+import (
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+func main() {
+	app := tview.NewApplication()
+
+	root := tview.NewFlex()
+	root.SetDirection(tview.FlexRow)
+	title := tview.NewTextView()
+	title.SetText(tview.Escape("Hello"))
+	root.AddItem(title, 0, 1, false)
+
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Rune() == 'q' {
+			app.Stop()
+		}
+		return event
+	})
+
+	if err := app.SetRoot(root, true).Run(); err != nil {
+		panic(err)
+	}
+}
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > blessed: style edge cases tree (truecolor) 1`] = `
+"const blessed = require('blessed');
+
+const screen = blessed.screen({
+  smartCSR: true,
+  title: "Screen",
+});
+
+const banner = blessed.box({
+  parent: screen,
+  top: 0,
+  left: 0,
+  width: 10,
+  height: 8,
+  style: { bg: "#ff0000" },
+});
+
+const centeredRow = blessed.box({
+  parent: screen,
+  top: 8,
+  left: 0,
+  width: 10,
+  height: 8,
+});
+
+const a = blessed.box({
+  parent: centeredRow,
+  top: 0,
+  left: 0.5,
+  width: 3,
+  height: 1,
+  content: "A",
+  style: { fg: "#800" },
+});
+
+const b = blessed.box({
+  parent: centeredRow,
+  top: 0,
+  left: 6.5,
+  width: 3,
+  height: 1,
+  content: "B",
+  style: { fg: "brightGreen" },
+});
+
+const spacedColumn = blessed.box({
+  parent: screen,
+  top: 16,
+  left: 0,
+  width: 10,
+  height: 8,
+});
+
+const c = blessed.box({
+  parent: spacedColumn,
+  top: 0,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "C",
+});
+
+const d = blessed.box({
+  parent: spacedColumn,
+  top: 4,
+  left: 0,
+  width: 10,
+  height: 1,
+  content: "D",
+});
+
+screen.key(['escape', 'q', 'C-c'], () => process.exit(0));
+
+screen.render();
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > bubbletea: style edge cases tree (truecolor) 1`] = `
+"package main
+
+import (
+	"fmt"
+	"os"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type model struct{}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" || msg.String() == "q" {
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m model) View() string {
+	banner := lipgloss.NewStyle().Background(lipgloss.Color("#ff0000")).Render("")
+	centeredRow := lipgloss.JoinHorizontal(lipgloss.Center, lipgloss.NewStyle().Foreground(lipgloss.Color("#880000")).Render("A"), "   ", lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("B"))
+	spacedColumn := lipgloss.JoinVertical(lipgloss.Left, "C", "D")
+	screen := lipgloss.JoinVertical(lipgloss.Left, banner, centeredRow, spacedColumn)
+	return screen
+}
+
+func main() {
+	p := tea.NewProgram(model{}, tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Println("Error:", err)
+		os.Exit(1)
+	}
+}
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > ink: style edge cases tree (truecolor) 1`] = `
+"import React from 'react';
+import { render, Box, Text } from 'ink';
+
+function App() {
+  return (
+    <Box>
+      <Box backgroundColor="#ff0000" />
+      <Box flexDirection="row" gap={3} justifyContent="center" alignItems="center">
+        <Text color="#800">A</Text>
+        <Text color="brightGreen">B</Text>
+      </Box>
+      <Box justifyContent="space-between">
+        <Text>C</Text>
+        <Text>D</Text>
+      </Box>
+    </Box>
+  );
+}
+
+render(<App />);
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > opentui: style edge cases tree (truecolor) 1`] = `
+"import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
+
+function App() {
+  return (
+    <box style={{ flexDirection: "column" }}>
+      <box style={{ backgroundColor: "#ff0000" }} />
+      <box style={{ flexDirection: "row", gap: 3, justifyContent: "center", alignItems: "center" }}>
+        <text fg={"#800"}>A</text>
+        <text fg={"brightGreen"}>B</text>
+      </box>
+      <box style={{ flexDirection: "column", justifyContent: "space-between" }}>
+        <text>C</text>
+        <text>D</text>
+      </box>
+    </box>
+  );
+}
+
+const renderer = await createCliRenderer();
+createRoot(renderer).render(<App />);
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > ratatui: style edge cases tree (truecolor) 1`] = `
+"// Requires: ratatui = "0.28"
+// Add to Cargo.toml: [dependencies] ratatui = { version = "0.28", features = ["crossterm"] }
+use std::io;
+use ratatui::{
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Block, BorderType, Borders, Paragraph},
+    Frame,
+};
+
+fn main() -> io::Result<()> {
+    let mut terminal = ratatui::init();
+    loop {
+        terminal.draw(ui)?;
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+    ratatui::restore();
+    Ok(())
+}
+
+fn ui(frame: &mut Frame) {
+    let area = frame.area();
+    let chunks_area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Min(1), Constraint::Min(1)])
+        .split(area);
+        let block_chunks_area_0_ = Block::new().style(Style::default().bg(Color::Rgb(255, 0, 0)));
+        let inner_chunks_area_0_ = block_chunks_area_0_.inner(chunks_area[0]);
+        frame.render_widget(block_chunks_area_0_, chunks_area[0]);
+        let chunks_chunks_area_1_ = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Fill(1), Constraint::Min(1), Constraint::Min(1), Constraint::Fill(1)])
+            .spacing(3)
+            .split(chunks_area[1]);
+            frame.render_widget(Paragraph::new("A").style(Style::default().fg(Color::Rgb(136, 0, 0))), chunks_chunks_area_1_[1]);
+            frame.render_widget(Paragraph::new("B").style(Style::default().fg(Color::LightGreen)), chunks_chunks_area_1_[2]);
+        let chunks_chunks_area_2_ = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Fill(1), Constraint::Min(1)])
+            .split(chunks_area[2]);
+            frame.render_widget(Paragraph::new("C").style(Style::default()), chunks_chunks_area_2_[0]);
+            frame.render_widget(Paragraph::new("D").style(Style::default()), chunks_chunks_area_2_[2]);
+
+}
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > textual: style edge cases tree (truecolor) 1`] = `
+"from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Static
+
+
+class MyApp(App):
+    CSS = """
+    #banner {
+        background: #ff0000;
+    }
+
+    #centeredrow > * {
+        margin-right: 3;
+    }
+
+    #a {
+        color: #800;
+    }
+
+    #b {
+        color: ansi_bright_green;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="banner"):
+            pass
+        with Horizontal(id="centeredrow"):
+            yield Static("A", id="a")
+            yield Static("B", id="b")
+        with Vertical():
+            yield Static("C")
+            yield Static("D")
+
+
+if __name__ == "__main__":
+    MyApp().run()
+"
+`;
+
+exports[`style edge cases (gradient fallback, justify/align/gap) > tview: style edge cases tree (truecolor) 1`] = `
+"package main
+
+import (
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+func main() {
+	app := tview.NewApplication()
+
+	root := tview.NewFlex()
+	root.SetDirection(tview.FlexRow)
+	banner := tview.NewFlex()
+	banner.SetDirection(tview.FlexRow)
+	banner.SetBackgroundColor(tcell.GetColor("#ff0000"))
+	root.AddItem(banner, 0, 1, false)
+	centeredRow := tview.NewFlex()
+	centeredRow.SetDirection(tview.FlexColumn)
+	a := tview.NewTextView()
+	a.SetText(tview.Escape("A"))
+	a.SetTextColor(tcell.GetColor("#800"))
+	centeredRow.AddItem(a, 0, 1, false)
+	b := tview.NewTextView()
+	b.SetText(tview.Escape("B"))
+	b.SetTextColor(tcell.PaletteColor(10))
+	centeredRow.AddItem(tview.NewBox(), 3, 0, false)
+	centeredRow.AddItem(b, 0, 1, false)
+	root.AddItem(centeredRow, 0, 1, false)
+	spacedColumn := tview.NewFlex()
+	spacedColumn.SetDirection(tview.FlexRow)
+	c := tview.NewTextView()
+	c.SetText(tview.Escape("C"))
+	spacedColumn.AddItem(c, 0, 1, false)
+	d := tview.NewTextView()
+	d.SetText(tview.Escape("D"))
+	spacedColumn.AddItem(d, 0, 1, false)
+	root.AddItem(spacedColumn, 0, 1, false)
+
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Rune() == 'q' {
+			app.Stop()
+		}
+		return event
+	})
+
+	if err := app.SetRoot(root, true).Run(); err != nil {
+		panic(err)
+	}
+}
+"
+`;
