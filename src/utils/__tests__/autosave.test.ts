@@ -63,7 +63,7 @@ describe('loadAutosave', () => {
   });
 
   it('rejects an unrecognized version', () => {
-    localStorage.setItem(KEY, JSON.stringify({ version: '2', tree: validTree }));
+    localStorage.setItem(KEY, JSON.stringify({ version: '999', tree: validTree }));
     expect(loadAutosave()).toBeNull();
   });
 

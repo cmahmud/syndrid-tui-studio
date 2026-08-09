@@ -111,7 +111,7 @@ export function PrototypeEditor({ component }: { component: ComponentNode }) {
         </div>
         <div>
           <label className={labelClass}>Flex direction</label>
-          <select className={inputClass} value={String(responsive?.layout?.direction ?? '')} onChange={(e) => updateResponsive({ layout: { ...(responsive?.layout ?? {}), direction: e.target.value || undefined } })}>
+          <select className={inputClass} value={String(responsive?.layout?.direction ?? '')} onChange={(e) => updateResponsive({ layout: { ...(responsive?.layout ?? {}), direction: e.target.value === 'row' || e.target.value === 'column' ? e.target.value : undefined } })}>
             <option value="">Inherit</option><option value="row">Row</option><option value="column">Column</option>
           </select>
         </div>
