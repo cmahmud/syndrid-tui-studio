@@ -17,3 +17,4 @@ tauri-build = { version = "=2.6.3", features = [] }
 tauri = { version = "=2.11.5", features = [] }
 syndrid-ratatui-runtime = { path = "../rust/syndrid-ratatui-runtime", features = ["advanced"] }
 portable-pty = "0.9.0"
+base64 = "0.22.1"
