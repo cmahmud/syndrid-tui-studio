@@ -121,6 +121,7 @@ jobs:
       - name: package exact generated delta
         shell: bash
         run: |
+          rm -f src-tauri/binaries/syndrid-tui-preview-*
           git add -A
           python - <<'PY'
           import json
