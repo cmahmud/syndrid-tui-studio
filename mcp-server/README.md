@@ -12,7 +12,7 @@ The structured project spec is the preferred implementation handoff. Generated R
 
 1. Run `npm ci` and `npm run dev`.
 2. Open the Studio and enable **Settings → Codex / MCP Agent Bridge**.
-3. Start Codex from the repository root. The included `.codex/config.toml` declares the `syndrid_tui_studio` MCP server and runs `node mcp-server/index.mjs` from this directory.
+3. Start Codex from the repository root. The included `.codex/config.toml` declares the `syndrid_tui_studio` MCP server and runs `node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs` from this directory.
 4. Call `get_bridge_status`, then `get_project_spec` before making design changes.
 5. After edits, call `get_layout_warnings` and `render_responsive_matrix` before treating the design as complete.
 

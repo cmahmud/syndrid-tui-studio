@@ -9,7 +9,7 @@ npm ci
 npm run dev
 ```
 
-Open Studio and enable **Settings → Codex / MCP Agent Bridge**. Then start Codex from the repository root. `.codex/config.toml` configures the `syndrid_tui_studio` stdio server (`node mcp-server/index.mjs`).
+Open Studio and enable **Settings → Codex / MCP Agent Bridge**. Then start Codex from the repository root. `.codex/config.toml` configures the `syndrid_tui_studio` stdio server (`node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs`).
 
 The MCP server marks inspection tools as read-only and all tools as closed-world/local. The project config uses Codex `writes` approval mode, so read-only inspection can stay low-friction while operations that change the design remain approval-aware. The toolbar's **Codex** status pill opens the bridge settings and shows whether the browser connection is live.
 
