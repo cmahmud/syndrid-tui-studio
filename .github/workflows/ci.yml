@@ -43,7 +43,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust-check
+          workspaces: |
+            rust-check
+            rust/syndrid-ratatui-runtime
+      - name: verify Syndrid Ratatui ecosystem runtime
+        run: |
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+          cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --features embedded
       - run: mkdir -p rust-check/src
       - run: cp scripts/ci-templates/rust/Cargo.toml rust-check/Cargo.toml
       - name: build each Ratatui variant
