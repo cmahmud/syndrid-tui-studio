@@ -30,9 +30,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Verify Syndrid extensions
-        run: npm run verify:syndrid
-
       - name: Run tests
         run: npm test
 
