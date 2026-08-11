@@ -71,8 +71,8 @@ pub fn syntax_highlight(
     language: &str,
     theme_name: &str,
 ) -> Result<Text<'static>, String> {
-    use tui_syntax_highlight::{Highlighter, syntect};
     use syntect::{highlighting::ThemeSet, parsing::SyntaxSet, util::LinesWithEndings};
+    use tui_syntax_highlight::{Highlighter, syntect};
 
     let syntax_set = SyntaxSet::load_defaults_newlines();
     let theme_set = ThemeSet::load_defaults();

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Pause, Play, RotateCcw, Send, Square, TerminalSquare, Trash2, X } from 'lucide-react';
+import { Terminal } from '@xterm/xterm';
+import '@xterm/xterm/css/xterm.css';
 import { useComponentStore, useProjectStore } from '../../stores';
 import type { TerminalTestScenario, TerminalTestSettings } from '../../types';
-import { ansiToHtml } from '../../utils/export/textExporter';
 import {
   nativePtyAvailable,
   nativePtyStatus,
   readNativePty,
+  resizeNativePty,
   startNativeTerminalTest,
   stopNativePty,
   writeNativePty,
@@ -22,30 +24,6 @@ interface TerminalTestModalProps {
 
 const SESSION_ID = 'studio-terminal-test';
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
-
-function keyboardBytes(event: React.KeyboardEvent): string | null {
-  if (event.ctrlKey && event.key.length === 1) {
-    const code = event.key.toUpperCase().charCodeAt(0);
-    if (code >= 64 && code <= 95) return String.fromCharCode(code - 64);
-  }
-  switch (event.key) {
-    case 'Enter': return '\r';
-    case 'Backspace': return '\x7f';
-    case 'Tab': return event.shiftKey ? '\x1b[Z' : '\t';
-    case 'Escape': return '\x1b';
-    case 'ArrowUp': return '\x1b[A';
-    case 'ArrowDown': return '\x1b[B';
-    case 'ArrowRight': return '\x1b[C';
-    case 'ArrowLeft': return '\x1b[D';
-    case 'Home': return '\x1b[H';
-    case 'End': return '\x1b[F';
-    case 'Delete': return '\x1b[3~';
-    case 'PageUp': return '\x1b[5~';
-    case 'PageDown': return '\x1b[6~';
-    default:
-      return event.key.length === 1 && !event.altKey && !event.metaKey ? event.key : null;
-  }
-}
 
 function scenarioForId(id: string, custom: TerminalTestScenario[]): TerminalTestScenario {
   if (id.startsWith('custom:')) {
@@ -73,8 +51,13 @@ function validateCustomScenario(value: unknown): TerminalTestScenario {
   const raw = value as Record<string, unknown>;
   if (typeof raw.id !== 'string' || !raw.id.trim()) throw new Error('Scenario id is required.');
   if (typeof raw.name !== 'string' || !raw.name.trim()) throw new Error('Scenario name is required.');
-  const presets = new Set(['default', 'empty', 'loading', 'loaded', 'error', 'offline', 'slow-network', 'large-data', 'unicode', 'custom']);
-  const preset = typeof raw.preset === 'string' && presets.has(raw.preset) ? raw.preset as TerminalTestScenario['preset'] : 'custom';
+  const presets = new Set([
+    'default', 'empty', 'loading', 'loaded', 'error', 'offline',
+    'slow-network', 'large-data', 'unicode', 'custom',
+  ]);
+  const preset = typeof raw.preset === 'string' && presets.has(raw.preset)
+    ? raw.preset as TerminalTestScenario['preset']
+    : 'custom';
   const timeline = Array.isArray(raw.timeline) ? raw.timeline : [];
   const variables = raw.variables && typeof raw.variables === 'object' && !Array.isArray(raw.variables)
     ? raw.variables as Record<string, unknown>
@@ -96,7 +79,6 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
   const available = nativePtyAvailable();
   const settings = project.terminalTest;
   const selectedScenario = scenarioForId(settings.scenarioId, project.testScenarios);
-  const [output, setOutput] = useState('');
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState<string | null>(null);
@@ -104,24 +86,21 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
   const [customJson, setCustomJson] = useState(() => JSON.stringify(sampleCustomScenario(), null, 2));
   const [customError, setCustomError] = useState<string | null>(null);
   const [showCustom, setShowCustom] = useState(false);
-  const terminalRef = useRef<HTMLPreElement>(null);
+  const terminalHostRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const runningRef = useRef(false);
+  const interactiveRef = useRef(settings.interactive);
   const ownsSession = useRef(false);
   const restartTimer = useRef<number | null>(null);
   const launchRevision = useRef(0);
 
-  const projectData = useMemo(() => project.exportProjectData(), [
-    project.settings,
-    project.viewports,
-    project.activeViewportId,
-    project.designTokens,
-    project.reusableComponents,
-    project.effectPlayback,
-    project.imageAssets,
-    project.runtimeLibraries,
-    project.testScenarios,
-    project.terminalTest,
-  ]);
+  useEffect(() => { runningRef.current = running; }, [running]);
+  useEffect(() => { interactiveRef.current = settings.interactive; }, [settings.interactive]);
 
+  const projectData = useMemo(
+    () => project.exportProjectData(),
+    [project]
+  );
   const testSpec = useMemo(
     () => buildTerminalTestSpec(root, projectData),
     [root, projectData]
@@ -129,10 +108,79 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
   const specJson = useMemo(() => JSON.stringify(testSpec), [testSpec]);
   const viewport = testSpec.viewport;
   const durationMs = Math.max(100, selectedScenario.durationMs);
+  const initialViewportRef = useRef(viewport);
 
   const setSettings = useCallback((patch: Partial<TerminalTestSettings>) => {
     project.updateTerminalTest(patch);
   }, [project]);
+
+  useEffect(() => {
+    const host = terminalHostRef.current;
+    if (!host) return;
+    const terminal = new Terminal({
+      cols: initialViewportRef.current.width,
+      rows: initialViewportRef.current.height,
+      convertEol: false,
+      cursorBlink: true,
+      cursorStyle: 'block',
+      disableStdin: !interactiveRef.current,
+      fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, monospace",
+      fontSize: 12,
+      lineHeight: 1,
+      letterSpacing: 0,
+      scrollback: 5000,
+      allowTransparency: false,
+      theme: {
+        background: '#050608',
+        foreground: '#d7dce2',
+        cursor: '#67e8f9',
+        selectionBackground: '#164e63',
+        black: '#111318',
+        red: '#f87171',
+        green: '#4ade80',
+        yellow: '#facc15',
+        blue: '#60a5fa',
+        magenta: '#c084fc',
+        cyan: '#22d3ee',
+        white: '#e5e7eb',
+        brightBlack: '#6b7280',
+        brightRed: '#fca5a5',
+        brightGreen: '#86efac',
+        brightYellow: '#fde047',
+        brightBlue: '#93c5fd',
+        brightMagenta: '#d8b4fe',
+        brightCyan: '#67e8f9',
+        brightWhite: '#ffffff',
+      },
+    });
+    terminal.open(host);
+    terminal.writeln('\x1b[2mPress Run to start the native Ratatui/TachyonFX preview.\x1b[0m');
+    const inputDisposable = terminal.onData((data) => {
+      if (!runningRef.current || !interactiveRef.current) return;
+      void writeNativePty(SESSION_ID, data).catch(() => undefined);
+    });
+    xtermRef.current = terminal;
+    return () => {
+      inputDisposable.dispose();
+      terminal.dispose();
+      if (xtermRef.current === terminal) xtermRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const terminal = xtermRef.current;
+    if (!terminal) return;
+    terminal.options.disableStdin = !settings.interactive;
+  }, [settings.interactive]);
+
+  useEffect(() => {
+    const terminal = xtermRef.current;
+    if (!terminal) return;
+    terminal.resize(viewport.width, viewport.height);
+    if (running && ownsSession.current) {
+      void resizeNativePty(SESSION_ID, viewport.width, viewport.height).catch(() => undefined);
+    }
+  }, [running, viewport.height, viewport.width]);
 
   const stop = useCallback(async (nextStatus = 'stopped') => {
     if (restartTimer.current !== null) {
@@ -143,32 +191,37 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
       try { await stopNativePty(SESSION_ID); } catch { /* already exited */ }
     }
     ownsSession.current = false;
+    runningRef.current = false;
     setRunning(false);
     setStatus(nextStatus);
   }, [available]);
 
-  const launch = useCallback(async (json: string, clearOutput = true) => {
+  const launch = useCallback(async (json: string, resetTerminal = true) => {
     if (!available) {
       setError('Terminal Test Mode requires the Tauri desktop app.');
       return;
     }
     const revision = ++launchRevision.current;
     setError(null);
-    if (clearOutput) setOutput('');
     setStatus('starting');
+    const terminal = xtermRef.current;
+    if (resetTerminal) terminal?.reset();
     try {
       if (ownsSession.current) {
         try { await stopNativePty(SESSION_ID); } catch { /* replacement is safe */ }
       }
+      terminal?.resize(viewport.width, viewport.height);
       await startNativeTerminalTest(SESSION_ID, json, viewport.width, viewport.height);
       if (revision !== launchRevision.current) return;
       ownsSession.current = true;
+      runningRef.current = true;
       setRunning(true);
       setStatus('running');
-      window.setTimeout(() => terminalRef.current?.focus(), 0);
+      window.setTimeout(() => terminal?.focus(), 0);
     } catch (cause) {
       if (revision !== launchRevision.current) return;
       ownsSession.current = false;
+      runningRef.current = false;
       setRunning(false);
       setStatus('error');
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -178,7 +231,7 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
   const replay = useCallback(async () => {
     if (running) {
       try {
-        await writeNativePty(SESSION_ID, '\x12'); // Ctrl+R, native runtime replay
+        await writeNativePty(SESSION_ID, '\x12');
         setSettings({ startAtMs: 0 });
         return;
       } catch { /* restart below */ }
@@ -193,28 +246,26 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
     const timer = window.setInterval(async () => {
       try {
         const chunk = await readNativePty(SESSION_ID);
-        if (!cancelled && chunk) {
-          setOutput((current) => (current + chunk).slice(-500_000));
-        }
+        if (!cancelled && chunk) xtermRef.current?.write(chunk);
         const next = await nativePtyStatus(SESSION_ID);
         if (!cancelled) {
           setStatus(next);
           if (next.startsWith('exited:')) {
             ownsSession.current = false;
+            runningRef.current = false;
             setRunning(false);
           }
         }
       } catch (cause) {
         if (!cancelled) {
           const message = cause instanceof Error ? cause.message : String(cause);
-          // A naturally exited session is removed by Rust. Do not turn that
-          // expected cleanup into a scary error after status already changed.
           if (!message.includes('unknown PTY session')) setError(message);
           ownsSession.current = false;
+          runningRef.current = false;
           setRunning(false);
         }
       }
-    }, 75);
+    }, 50);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -222,18 +273,11 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
   }, [available, running]);
 
   useEffect(() => {
-    if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-  }, [output]);
-
-  // Hot reload deliberately restarts the tiny sidecar instead of building a
-  // second live-sync protocol. The spec is already resolved and startup is
-  // effectively instant, while the behavior remains deterministic.
-  useEffect(() => {
     if (!running || !settings.hotReload || !available) return;
     if (restartTimer.current !== null) window.clearTimeout(restartTimer.current);
     restartTimer.current = window.setTimeout(() => {
       restartTimer.current = null;
-      void launch(specJson, false);
+      void launch(specJson, true);
     }, 250);
     return () => {
       if (restartTimer.current !== null) {
@@ -254,27 +298,18 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
     try {
       await writeNativePty(SESSION_ID, `${textInput}\r`);
       setTextInput('');
-      terminalRef.current?.focus();
+      xtermRef.current?.focus();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
 
-  const handleTerminalKey = (event: React.KeyboardEvent<HTMLPreElement>) => {
-    if (!running || !settings.interactive) return;
-    const bytes = keyboardBytes(event);
-    if (bytes === null) return;
-    event.preventDefault();
-    event.stopPropagation();
-    void writeNativePty(SESSION_ID, bytes).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
-  };
-
   const editSelectedCustom = () => {
-    if (!settings.scenarioId.startsWith('custom:')) {
-      setCustomJson(JSON.stringify(sampleCustomScenario(), null, 2));
-    } else {
-      setCustomJson(JSON.stringify(selectedScenario, null, 2));
-    }
+    setCustomJson(JSON.stringify(
+      settings.scenarioId.startsWith('custom:') ? selectedScenario : sampleCustomScenario(),
+      null,
+      2
+    ));
     setCustomError(null);
     setShowCustom(true);
   };
@@ -297,19 +332,15 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
     setShowCustom(false);
   };
 
-  const htmlOutput = useMemo(() => ansiToHtml(output || (available
-    ? 'Press Run to start a real Ratatui/TachyonFX terminal test.'
-    : 'Open Syndrid TUI Studio Desktop to use the native terminal test runtime.')), [available, output]);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5" role="dialog" aria-modal="true" aria-label="Terminal Test Mode">
-      <div className="flex h-[min(860px,92vh)] w-[min(1420px,96vw)] flex-col overflow-hidden rounded-xl border border-border bg-background">
+      <div className="relative flex h-[min(860px,92vh)] w-[min(1420px,96vw)] flex-col overflow-hidden rounded-xl border border-border bg-background">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <TerminalSquare className="h-4 w-4" />
             <div>
               <div className="text-sm font-semibold">Terminal Test Mode</div>
-              <div className="text-[10px] text-muted-foreground">Real Ratatui + TachyonFX in a native PTY/ConPTY</div>
+              <div className="text-[10px] text-muted-foreground">Real Ratatui + TachyonFX · native PTY/ConPTY · xterm VT emulator</div>
             </div>
           </div>
           <button type="button" onClick={onClose} className="rounded p-2 hover:bg-accent" title="Close terminal test">
@@ -375,7 +406,7 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
 
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={editSelectedCustom} className="rounded border border-border px-2 py-1.5 hover:bg-accent">{settings.scenarioId.startsWith('custom:') ? 'Edit scenario' : 'New scenario'}</button>
-                <button type="button" onClick={() => setOutput('')} className="rounded border border-border px-2 py-1.5 hover:bg-accent">Clear output</button>
+                <button type="button" onClick={() => xtermRef.current?.reset()} className="rounded border border-border px-2 py-1.5 hover:bg-accent">Clear terminal</button>
               </div>
 
               <div className="rounded border border-border bg-card/40 p-2 text-[10px] text-muted-foreground">
@@ -387,11 +418,11 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
                 <div>Layout warnings: {testSpec.warnings.length}</div>
               </div>
 
-              {testSpec.warnings.length > 0 && <div className="flex gap-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0"/><span>This scenario currently has {testSpec.warnings.length} layout warning(s). The terminal still runs so you can inspect them.</span></div>}
+              {testSpec.warnings.length > 0 && <div className="flex gap-2 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-[10px] text-amber-300"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0"/><span>This scenario has {testSpec.warnings.length} layout warning(s). The native terminal still runs so you can inspect them.</span></div>}
             </div>
           </aside>
 
-          <main className="flex min-h-0 min-w-0 flex-col bg-[#080a0d]">
+          <main className="flex min-h-0 min-w-0 flex-col bg-[#050608]">
             <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
               <button type="button" disabled={!available} onClick={() => running ? void stop() : void launch(specJson)} className="flex items-center gap-1.5 rounded border border-white/15 px-3 py-1.5 text-xs disabled:opacity-40">
                 {running ? <Square className="h-3.5 w-3.5"/> : <Play className="h-3.5 w-3.5"/>} {running ? 'Stop' : 'Run'}
@@ -402,17 +433,12 @@ export function TerminalTestModal({ onClose }: TerminalTestModalProps) {
               <span className="text-[10px] text-white/35">{viewport.width}×{viewport.height} · Ctrl+Q quit · Ctrl+R replay · Ctrl+P pause</span>
             </div>
 
-            <pre
-              ref={terminalRef}
-              tabIndex={0}
-              onKeyDown={handleTerminalKey}
-              className="min-h-0 flex-1 overflow-auto whitespace-pre bg-black p-3 font-mono text-[12px] leading-[1.15] text-[#d7dce2] outline-none focus:ring-1 focus:ring-cyan-400/40"
-              aria-label="Interactive native terminal output"
-              dangerouslySetInnerHTML={{ __html: htmlOutput }}
-            />
+            <div className="min-h-0 flex-1 overflow-auto bg-black p-2">
+              <div ref={terminalHostRef} className="inline-block min-h-full min-w-full" aria-label="Interactive native terminal output" />
+            </div>
 
             <div className="flex gap-2 border-t border-white/10 p-2">
-              <input value={textInput} onChange={(event) => setTextInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void sendText(); } }} disabled={!running || !settings.interactive} placeholder="Send text to focused terminal component…" className="min-w-0 flex-1 rounded border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white disabled:opacity-40" />
+              <input value={textInput} onChange={(event) => setTextInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void sendText(); } }} disabled={!running || !settings.interactive} placeholder="Send text to the native terminal…" className="min-w-0 flex-1 rounded border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white disabled:opacity-40" />
               <button type="button" disabled={!running || !settings.interactive || !textInput} onClick={() => void sendText()} className="flex items-center gap-1 rounded border border-white/10 px-3 text-xs disabled:opacity-40"><Send className="h-3 w-3"/> Send</button>
             </div>
 
