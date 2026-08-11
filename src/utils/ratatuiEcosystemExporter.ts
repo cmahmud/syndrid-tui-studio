@@ -1,4 +1,10 @@
-import type { ComponentEcosystemSpec, ComponentNode, SyndridProjectData } from '../types';
+import type {
+  ComponentEcosystemSpec,
+  ComponentNode,
+  RatatuiEcosystemLibraryId,
+  RatatuiRuntimeLibraries,
+  SyndridProjectData,
+} from '../types';
 import {
   RATATUI_ADAPTERS,
   RATATUI_ECOSYSTEM_LIBRARIES,
@@ -24,14 +30,9 @@ export interface RatatuiEcosystemExport {
 function resolveEcosystemSpec(node: ComponentNode): ComponentEcosystemSpec | null {
   const explicit = node.prototype?.ecosystem;
   if (explicit) return explicit.adapter === 'native' ? null : explicit;
-
   const adapter = recommendedAdapterForType(node.type);
   if (adapter === 'native') return null;
   const inferred = defaultEcosystemSpec(adapter);
-
-  // First-class component props seed the richer adapter automatically so a
-  // freshly dropped Image/Terminal/Code component exports correctly before
-  // the user ever opens the Prototype inspector.
   if (adapter === 'image' && inferred.image) {
     inferred.image.assetId = typeof node.props.assetId === 'string' && node.props.assetId ? node.props.assetId : undefined;
   }
@@ -53,7 +54,20 @@ export function collectEcosystemBindings(node: ComponentNode | null, out: Ecosys
   return out;
 }
 
-function crateVersion(id: string, fallback: string): string {
+function projectRuntimeVersion(id: RatatuiEcosystemLibraryId, libraries: RatatuiRuntimeLibraries): string | undefined {
+  switch (id) {
+    case 'ratatui': return libraries.ratatui;
+    case 'tachyonfx': return libraries.tachyonfx;
+    case 'ratatui-textarea': return libraries.ratatuiTextarea;
+    case 'tui-widgets': return libraries.tuiWidgets;
+    case 'ratatui-image': return libraries.ratatuiImage;
+    case 'mousefood': return libraries.mousefood;
+    case 'ansi-to-tui': return libraries.ansiToTui;
+    default: return undefined;
+  }
+}
+
+function catalogVersion(id: RatatuiEcosystemLibraryId, fallback: string): string {
   return RATATUI_ECOSYSTEM_LIBRARIES.find((entry) => entry.id === id)?.version ?? fallback;
 }
 
@@ -61,29 +75,48 @@ function stringLiteral(value: string): string { return JSON.stringify(value); }
 
 export function exportRatatuiEcosystem(
   root: ComponentNode | null,
-  project: Pick<SyndridProjectData, 'imageAssets'>
+  project: Pick<SyndridProjectData, 'imageAssets' | 'runtimeLibraries'>
 ): RatatuiEcosystemExport {
   const bindings = collectEcosystemBindings(root);
   const adapterIds = new Set(bindings.map((binding) => binding.spec.adapter));
   const embedded = bindings.some((binding) => binding.spec.embedded?.enabled);
   const warnings: string[] = [];
   const dependencies = new Map<string, string>();
+  const overrides = new Map<RatatuiEcosystemLibraryId, Set<string>>();
 
-  dependencies.set('ratatui', `ratatui = { version = "${crateVersion('ratatui', '0.30.2')}", features = ["crossterm"] }`);
-  if (adapterIds.has('textarea')) dependencies.set('ratatui-textarea', `ratatui-textarea = { version = "${crateVersion('ratatui-textarea', '0.9.2')}", features = ["crossterm", "search", "serde"] }`);
-  if (adapterIds.has('image')) dependencies.set('ratatui-image', `ratatui-image = { version = "${crateVersion('ratatui-image', '11.0.6')}", default-features = false, features = ["crossterm", "image-defaults", "serde"] }`);
-  if ([...adapterIds].some((id) => ['big-text', 'card', 'popup', 'prompt', 'scrollview'].includes(id))) dependencies.set('tui-widgets', `tui-widgets = { version = "${crateVersion('tui-widgets', '0.7.10')}", features = ["big-text", "cards", "popup", "prompts", "scrollbar", "scrollview"] }`);
-  if (adapterIds.has('tree-widget')) dependencies.set('tui-tree-widget', `tui-tree-widget = "${crateVersion('tui-tree-widget', '0.24.1')}"`);
-  if (adapterIds.has('widget-list')) dependencies.set('tui-widget-list', `tui-widget-list = "${crateVersion('tui-widget-list', '0.15.3')}"`);
-  if (adapterIds.has('terminal')) dependencies.set('tui-term', `tui-term = { version = "${crateVersion('tui-term', '0.3.4')}", features = ["unstable"] }`);
-  if (adapterIds.has('interactive')) dependencies.set('ratatui-interact', `ratatui-interact = "${crateVersion('ratatui-interact', '0.5.3')}"`);
-  if (adapterIds.has('syntax-highlight')) {
-    dependencies.set('tui-syntax-highlight', `tui-syntax-highlight = { version = "${crateVersion('tui-syntax-highlight', '0.2.0')}", default-features = false, features = ["regex-fancy", "termprofile"] }`);
-    dependencies.set('termprofile', `termprofile = { version = "${crateVersion('termprofile', '0.2.4')}", features = ["convert", "ratatui"] }`);
+  for (const binding of bindings) {
+    for (const [library, rawVersion] of Object.entries(binding.spec.libraryOverrides ?? {})) {
+      const version = String(rawVersion ?? '').trim();
+      if (!version) continue;
+      const id = library as RatatuiEcosystemLibraryId;
+      const set = overrides.get(id) ?? new Set<string>();
+      set.add(version);
+      overrides.set(id, set);
+    }
   }
-  if (adapterIds.has('node-graph')) dependencies.set('tui-nodes', `tui-nodes = "${crateVersion('tui-nodes', '0.10.0')}"`);
-  if (adapterIds.has('ansi-text')) dependencies.set('ansi-to-tui', `ansi-to-tui = "${crateVersion('ansi-to-tui', '8.0.1')}"`);
-  if (embedded) dependencies.set('mousefood', `mousefood = { version = "${crateVersion('mousefood', '0.5.2')}", optional = true, default-features = false, features = ["std", "fonts", "framebuffer"] }`);
+
+  const version = (id: RatatuiEcosystemLibraryId, fallback: string): string => {
+    const requested = overrides.get(id);
+    if (requested && requested.size === 1) return [...requested][0];
+    if (requested && requested.size > 1) warnings.push(`${id}: conflicting component version overrides (${[...requested].join(', ')}); using project runtime version.`);
+    return projectRuntimeVersion(id, project.runtimeLibraries) ?? catalogVersion(id, fallback);
+  };
+
+  dependencies.set('ratatui', `ratatui = { version = "${version('ratatui', '0.30.2')}", features = ["crossterm"] }`);
+  if (adapterIds.has('textarea')) dependencies.set('ratatui-textarea', `ratatui-textarea = { version = "${version('ratatui-textarea', '0.9.2')}", features = ["crossterm", "search", "serde"] }`);
+  if (adapterIds.has('image')) dependencies.set('ratatui-image', `ratatui-image = { version = "${version('ratatui-image', '11.0.6')}", default-features = false, features = ["crossterm", "image-defaults", "serde"] }`);
+  if ([...adapterIds].some((id) => ['big-text', 'card', 'popup', 'prompt', 'scrollview'].includes(id))) dependencies.set('tui-widgets', `tui-widgets = { version = "${version('tui-widgets', '0.7.10')}", features = ["big-text", "cards", "popup", "prompts", "scrollbar", "scrollview"] }`);
+  if (adapterIds.has('tree-widget')) dependencies.set('tui-tree-widget', `tui-tree-widget = "${version('tui-tree-widget', '0.24.1')}"`);
+  if (adapterIds.has('widget-list')) dependencies.set('tui-widget-list', `tui-widget-list = "${version('tui-widget-list', '0.15.3')}"`);
+  if (adapterIds.has('terminal')) dependencies.set('tui-term', `tui-term = { version = "${version('tui-term', '0.3.4')}", features = ["unstable"] }`);
+  if (adapterIds.has('interactive')) dependencies.set('ratatui-interact', `ratatui-interact = "${version('ratatui-interact', '0.5.3')}"`);
+  if (adapterIds.has('syntax-highlight')) {
+    dependencies.set('tui-syntax-highlight', `tui-syntax-highlight = { version = "${version('tui-syntax-highlight', '0.2.0')}", default-features = false, features = ["regex-fancy", "termprofile"] }`);
+    dependencies.set('termprofile', `termprofile = { version = "${version('termprofile', '0.2.4')}", features = ["convert", "ratatui"] }`);
+  }
+  if (adapterIds.has('node-graph')) dependencies.set('tui-nodes', `tui-nodes = "${version('tui-nodes', '0.10.0')}"`);
+  if (adapterIds.has('ansi-text')) dependencies.set('ansi-to-tui', `ansi-to-tui = "${version('ansi-to-tui', '8.0.1')}"`);
+  if (embedded) dependencies.set('mousefood', `mousefood = { version = "${version('mousefood', '0.5.2')}", optional = true, default-features = false, features = ["std", "fonts", "framebuffer"] }`);
 
   for (const binding of bindings) {
     if (!RATATUI_ADAPTERS.some((entry) => entry.id === binding.spec.adapter)) {
@@ -103,6 +136,7 @@ export function exportRatatuiEcosystem(
   const lines = [
     '// Syndrid Ratatui ecosystem integration plan',
     '// Generated from canonical .tui component + adapter metadata.',
+    '// Versions come from project.runtimeLibraries plus non-conflicting component overrides.',
     '// Allocate state once in the application model; Frame rendering must stay side-effect free.',
     '',
   ];
@@ -143,5 +177,9 @@ export function exportRatatuiEcosystem(
   }
   if (!bindings.length) lines.push('// No non-native ecosystem adapters are currently assigned.');
 
-  return { libraries: RATATUI_ECOSYSTEM_LIBRARIES, bindings, cargoSnippet, rustPlan: lines.join('\n'), warnings };
+  const libraries = RATATUI_ECOSYSTEM_LIBRARIES.map((library) => ({
+    ...library,
+    version: projectRuntimeVersion(library.id, project.runtimeLibraries) ?? library.version,
+  }));
+  return { libraries, bindings, cargoSnippet, rustPlan: lines.join('\n'), warnings };
 }
