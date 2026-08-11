@@ -4,7 +4,15 @@
 
 import { create } from 'zustand';
 
-export type DialogName = 'save' | 'export' | 'about' | 'help' | 'changelog' | 'settings' | 'templates';
+export type DialogName =
+  | 'save'
+  | 'export'
+  | 'about'
+  | 'help'
+  | 'changelog'
+  | 'settings'
+  | 'templates'
+  | 'terminal-test';
 
 interface UIState {
   toolbarDocked: boolean;
@@ -24,11 +32,6 @@ interface UIState {
   setAgentBridgeStatus: (status: 'disconnected' | 'connecting' | 'connected') => void;
 
   // AI integration Phase 5 — conflict surfacing: last-write-wins, made visible.
-  // The agent bridge has no live push feed and no locking (see todo.md's Phase
-  // 5 note), so a human editing at the same time as an agent's turn can have
-  // their change overwritten. This doesn't prevent that — it just makes an
-  // agent-driven commit visible the moment it happens, the same way a human
-  // collaborator's cursor would be in a live-collab tool.
   agentActivity: { message: string; at: number } | null;
   setAgentActivity: (message: string) => void;
   clearAgentActivity: () => void;
