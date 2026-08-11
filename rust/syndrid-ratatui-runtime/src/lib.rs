@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 
 pub mod adapters;
+#[cfg(feature = "desktop")]
+pub mod preview;
 
 pub use ansi_to_tui;
 pub use ratatui;
