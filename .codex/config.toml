@@ -2,7 +2,7 @@
 # Codex loads project configuration for trusted projects.
 [mcp_servers.syndrid_tui_studio]
 command = "node"
-args = ["mcp-server/index.mjs"]
+args = ["--import", "./mcp-server/bridge-auth-preload.mjs", "./mcp-server/index.mjs"]
 cwd = "."
 enabled = true
 required = false
