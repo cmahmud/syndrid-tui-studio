@@ -24,8 +24,6 @@ jobs:
           name: export-check
           path: export-check/
 
-  # Generated fixture output is passed through each target's real toolchain so
-  # exporter drift is caught alongside the source Studio/runtime checks.
   verify-rust:
     needs: build
     runs-on: ubuntu-latest
@@ -41,12 +39,15 @@ jobs:
           workspaces: |
             rust-check
             rust/syndrid-ratatui-runtime
+            src-tauri
       - name: verify Syndrid Ratatui ecosystem runtime
         run: |
           cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
           cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
           cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
           cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+      - name: verify desktop links the ecosystem runtime
+        run: cargo check --manifest-path src-tauri/Cargo.toml
       - run: mkdir -p rust-check/src
       - run: cp scripts/ci-templates/rust/Cargo.toml rust-check/Cargo.toml
       - name: build each Ratatui variant
