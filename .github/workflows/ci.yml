@@ -29,27 +29,25 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path('src/components/editor/TerminalTestModal.tsx')
           text = path.read_text()
-          old = """  const projectData = useMemo(() => project.exportProjectData(), [
-            project.settings,
-            project.viewports,
-            project.activeViewportId,
-            project.designTokens,
-            project.reusableComponents,
-            project.effectPlayback,
-            project.imageAssets,
-            project.runtimeLibraries,
-            project.testScenarios,
-            project.terminalTest,
-          ]);"""
-          new = """  const projectData = useMemo(
+          replacement = """  const projectData = useMemo(
             () => project.exportProjectData(),
             [project]
-          );"""
-          if old not in text:
-              raise SystemExit('TerminalTestModal projectData dependency block changed unexpectedly')
-          path.write_text(text.replace(old, new))
+          );
+
+          const testSpec"""
+          updated, count = re.subn(
+              r"  const projectData = useMemo\([\s\S]*?\n\s*const testSpec",
+              replacement,
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f'expected one projectData useMemo block, found {count}')
+          path.write_text(updated)
           PY
       - run: npm run lint
       - name: run tests and accept intentional integer-terminal-layout snapshot updates
