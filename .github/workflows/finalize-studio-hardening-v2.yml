@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   finalize:
@@ -118,40 +118,73 @@ jobs:
         shell: bash
         run: rm -rf scripts/bootstrap
 
-      - name: package exact generated delta
+      - name: publish clean validated source with GitHub objects API
+        env:
+          GH_OBJECT_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           rm -f src-tauri/binaries/syndrid-tui-preview-*
           git add -A
           python - <<'PY'
+          import base64
           import json
+          import os
           import subprocess
-          import zipfile
+          import urllib.error
+          import urllib.request
           from pathlib import Path
 
-          raw = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z'])
-          paths = [p.decode() for p in raw.split(b'\0') if p]
-          deleted = []
-          included = []
-          with zipfile.ZipFile('studio-hardening-generated-state.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-              for path in paths:
-                  source = Path(path)
-                  if source.exists() and source.is_file():
-                      archive.write(source, f'files/{path}')
-                      included.append(path)
-                  else:
-                      deleted.append(path)
-              metadata = {
-                  'base_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-                  'included': included,
-                  'deleted': deleted,
-              }
-              archive.writestr('metadata.json', json.dumps(metadata, indent=2))
-          print(json.dumps(metadata, indent=2))
-          PY
+          repo = os.environ['GH_REPOSITORY']
+          token = os.environ['GH_OBJECT_TOKEN']
+          api = f'https://api.github.com/repos/{repo}'
+          parent = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          base_tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          raw_paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z'])
+          paths = [p.decode() for p in raw_paths.split(b'\0') if p]
+          print(f'Publishing {len(paths)} source paths:')
+          print('\n'.join(paths))
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: studio-hardening-generated-state
-          path: studio-hardening-generated-state.zip
-          if-no-files-found: error
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'Content-Type': 'application/json',
+              'User-Agent': 'syndrid-studio-finalizer',
+          }
+          def request(method, endpoint, payload=None):
+              data = json.dumps(payload).encode() if payload is not None else None
+              req = urllib.request.Request(api + endpoint, data=data, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode(errors='replace')
+                  raise RuntimeError(f'{method} {endpoint} -> {exc.code}: {body}') from exc
+
+          entries = []
+          for path in paths:
+              file_path = Path(path)
+              if not file_path.exists():
+                  entries.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': None})
+                  continue
+              mode_line = subprocess.check_output(['git', 'ls-files', '-s', '--', path], text=True).strip()
+              mode = mode_line.split()[0] if mode_line else '100644'
+              blob = request('POST', '/git/blobs', {
+                  'content': base64.b64encode(file_path.read_bytes()).decode(),
+                  'encoding': 'base64',
+              })
+              entries.append({'path': path, 'mode': mode, 'type': 'blob', 'sha': blob['sha']})
+
+          tree = request('POST', '/git/trees', {'base_tree': base_tree, 'tree': entries})
+          commit = request('POST', '/git/commits', {
+              'message': 'chore: finalize terminal runtime hardening',
+              'tree': tree['sha'],
+              'parents': [parent],
+          })
+          request('POST', '/git/refs', {
+              'ref': 'refs/heads/agent/studio-hardening-generated-final-v6',
+              'sha': commit['sha'],
+          })
+          print(f"GENERATED_COMMIT={commit['sha']}")
+          PY
