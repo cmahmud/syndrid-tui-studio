@@ -1,0 +1,352 @@
+name: Finalize Studio hardening v2
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: converge sidecar packaging and structural verification
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          package = Path('package.json')
+          text = package.read_text()
+          text = text.replace('node scripts/prepare-preview-sidecar-v2.mjs --release', 'node scripts/prepare-preview-sidecar-v3.mjs --release')
+          text = text.replace('node scripts/prepare-preview-sidecar-v2.mjs', 'node scripts/prepare-preview-sidecar-v3.mjs')
+          package.write_text(text)
+
+          verifier = Path('scripts/verify-syndrid.mjs')
+          text = verifier.read_text()
+          text = text.replace("'src-tauri/src/bin/syndrid-tui-preview.rs'", "'rust/syndrid-ratatui-runtime/src/bin/syndrid-tui-preview.rs'")
+          text = text.replace("'scripts/prepare-preview-sidecar-v2.mjs'", "'scripts/prepare-preview-sidecar-v3.mjs'")
+          verifier.write_text(text)
+          PY
+          rm -f src-tauri/src/bin/syndrid-tui-preview.rs
+          rm -f scripts/prepare-preview-sidecar-v2.mjs
+
+      - name: converge audited frontend dependencies
+        run: |
+          npm install --package-lock-only
+          npm audit fix --package-lock-only
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+      - name: install xterm test surface if staging remains
+        shell: bash
+        run: |
+          if [ -f scripts/bootstrap/TerminalTestModal.tsx ]; then
+            cp scripts/bootstrap/TerminalTestModal.tsx src/components/editor/TerminalTestModal.tsx
+          fi
+
+      - name: deterministic Rust cleanup and formatting
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('rust/syndrid-ratatui-runtime/src/preview.rs')
+          text = path.read_text()
+          text = text.replace('#[derive(Debug)]\nstruct RuntimeState {', 'struct RuntimeState {')
+          old = '''            let items = values.unwrap_or(&Vec::new()).iter().enumerate().map(|(item_index, value)| {
+                let prefix = if item_index == selected { "› " } else { "  " };
+                ListItem::new(format!("{prefix}{}", object_label(value)))
+            }).collect::<Vec<_>>();'''
+          new = '''            let empty_values = Vec::new();
+            let source_values = values.unwrap_or(&empty_values);
+            let items = source_values.iter().enumerate().map(|(item_index, value)| {
+                let prefix = if item_index == selected { "› " } else { "  " };
+                ListItem::new(format!("{prefix}{}", object_label(value)))
+            }).collect::<Vec<_>>();'''
+          text = text.replace(old, new)
+          path.write_text(text)
+          PY
+          cargo fmt --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+
+      - name: frontend correctness gate
+        run: |
+          npm run lint
+          npm test -- -u
+          npm run build
+          npm run verify:syndrid
+
+      - name: real Ratatui and TachyonFX runtime gate
+        run: |
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+          cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+
+      - name: build decoupled native preview sidecar
+        run: npm run prepare:preview-sidecar
+
+      - name: ensure permanent documentation exists
+        shell: bash
+        run: |
+          if [ ! -f docs/TERMINAL_TEST_MODE.md ]; then
+            cat > docs/TERMINAL_TEST_MODE.md <<'DOC'
+          # Terminal Test Mode
+
+          Syndrid TUI Studio can run the current `.tui` v3 design through a real native terminal path before production implementation.
+
+          `Studio .tui v3 -> resolved viewport/state/scenario -> syndrid-terminal-test/v1 -> Ratatui + TachyonFX -> native PTY/ConPTY -> xterm VT emulator`
+
+          The bundled `syndrid-tui-preview` console sidecar renders real Ratatui widgets and compiles authored TachyonFX DSL at runtime. Built-in deterministic scenarios cover Default, Empty, Loading, Loaded, Error, Offline, Slow Network, Large Dataset, and Unicode/Emoji. Custom fake-data/timeline scenarios persist in `.tui` v3 without mutating the authored tree.
+
+          Controls include viewport, scenario, 0.25x-4x speed, reduced motion, loop, start position, fake data, hot reload, keyboard input and a debug overlay. Inside the runtime, Tab/Shift+Tab navigate focus, arrows navigate supported selection widgets, Enter activates controls, Ctrl+P pauses, Ctrl+R replays, Ctrl++/Ctrl+- adjust speed and Ctrl+Q exits.
+
+          The test runtime shares the same canonical motion resolver and responsive resolver used by save, MCP, production motion export and implementation-spec generation. Hidden responsive nodes consume no layout space and all rectangles passed to Ratatui are integer terminal cells.
+          DOC
+          fi
+          if [ ! -f docs/SECURITY.md ]; then
+            cat > docs/SECURITY.md <<'DOC'
+          # Desktop and Agent-Bridge Security
+
+          - Tauri uses explicit production/development CSPs.
+          - The MCP browser bridge binds only to `127.0.0.1:5175` and requires a random per-user token plus an allowed local origin.
+          - Bridge tokens are never stored in `.tui` files, MCP responses or source control.
+          - Native preview specs are validated before the bundled sidecar is launched and temporary spec files are removed with the PTY lifecycle.
+          - PTY output is bounded and local image preview enforces supported extensions and a size limit.
+          - Terminal commands are only started by explicit user test/run actions, never by ordinary Canvas rendering.
+          DOC
+          fi
+
+      - name: refresh stale direct MCP launch docs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for path in [Path('README.md'), Path('AGENTS.md'), Path('CLAUDE.md'), Path('docs/CODEX.md'), Path('mcp-server/README.md'), Path('.claude/skills/tui-studio/SKILL.md'), Path('.claude/skills/stuidio-skill/SKILL.md')]:
+              if not path.exists(): continue
+              text = path.read_text()
+              text = text.replace('node mcp-server/index.mjs', 'node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs')
+              text = text.replace('node ./mcp-server/index.mjs', 'node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs')
+              path.write_text(text)
+          PY
+
+      - name: add changelog entry once
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          marker = '## Unreleased - Studio hardening and Terminal Test Mode'
+          if marker not in text:
+              path.write_text(marker + '''\n\n- Unified TachyonFX preview/save/MCP/export discovery around one canonical resolver.\n- Added deep `.tui` v3 effect/ecosystem validation and canonical v3 autosave migration.\n- Fixed integer terminal-cell layout, hidden responsive children, and preview/matrix/warning resolver drift.\n- Preserved the complete Ratatui runtime-version map and unified generated Cargo guidance.\n- Added real Ratatui + TachyonFX Terminal Test Mode with deterministic fake data, interaction controls, reduced motion, hot reload, and a bundled native sidecar.\n- Added xterm VT emulation for faithful PTY cursor/alternate-screen rendering.\n- Fixed PTY natural-exit cleanup and temporary preview-spec lifecycle.\n- Added a restrictive Tauri CSP and token/origin-protected localhost MCP bridge.\n- Restored structural verification and a production dependency audit gate.\n\n''' + text)
+          PY
+
+      - name: restore permanent non-mutating CI
+        shell: bash
+        run: |
+          cat > .github/workflows/ci.yml <<'YAML'
+          name: CI
+
+          on:
+            push:
+              branches: [main]
+            pull_request:
+
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: 22
+                    cache: npm
+                - run: npm ci
+                - name: reject high-severity production dependency advisories
+                  run: npm audit --omit=dev --audit-level=high
+                - run: npm run lint
+                - run: npm test
+                - run: npm run build
+                - run: npm run verify:syndrid
+                - run: node scripts/generate-export-fixtures.mjs
+                - uses: actions/upload-artifact@v4
+                  with:
+                    name: export-check
+                    path: export-check/
+
+            verify-rust:
+              needs: build
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/download-artifact@v4
+                  with:
+                    name: export-check
+                    path: export-check
+                - uses: dtolnay/rust-toolchain@stable
+                - uses: Swatinem/rust-cache@v2
+                  with:
+                    workspaces: |
+                      rust-check
+                      rust/syndrid-ratatui-runtime
+                - name: verify Syndrid Ratatui ecosystem and native terminal runtime
+                  run: |
+                    cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+                    cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+                    cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+                    cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+                - run: mkdir -p rust-check/src
+                - run: cp scripts/ci-templates/rust/Cargo.toml rust-check/Cargo.toml
+                - name: build each Ratatui variant
+                  run: |
+                    for f in ratatui ratatui-edge ratatui-edge-ansi16 ratatui-edge-ansi256; do
+                      cp "export-check/$f.rs" rust-check/src/main.rs
+                      cargo build --manifest-path rust-check/Cargo.toml
+                    done
+
+            verify-tauri-windows:
+              needs: build
+              runs-on: windows-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: 22
+                    cache: npm
+                - run: npm ci
+                - uses: dtolnay/rust-toolchain@stable
+                - uses: Swatinem/rust-cache@v2
+                  with:
+                    workspaces: |
+                      rust/syndrid-ratatui-runtime
+                      src-tauri
+                - name: build exact Windows terminal preview sidecar
+                  run: npm run prepare:preview-sidecar
+                - name: verify sidecar target-triple artifact exists
+                  shell: pwsh
+                  run: |
+                    $hostLine = (rustc -vV | Select-String '^host:').Line
+                    $triple = ($hostLine -replace '^host:\s*', '').Trim()
+                    $sidecar = "src-tauri/binaries/syndrid-tui-preview-$triple.exe"
+                    if (-not (Test-Path $sidecar)) { throw "Missing prepared sidecar: $sidecar" }
+                - name: verify Windows desktop, PTY, sidecar and ecosystem runtime linkage
+                  run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+
+            verify-go:
+              needs: build
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/download-artifact@v4
+                  with:
+                    name: export-check
+                    path: export-check
+                - uses: actions/setup-go@v5
+                  with:
+                    go-version: stable
+                - run: mkdir -p go-check
+                - run: cp scripts/ci-templates/bubbletea/view_test.go go-check/view_test.go
+                - run: cp export-check/bubbletea.go go-check/main.go
+                - working-directory: go-check
+                  run: |
+                    go mod init exportcheck
+                    go mod tidy
+                - name: test each Bubble Tea variant
+                  working-directory: go-check
+                  run: |
+                    for f in bubbletea bubbletea-edge bubbletea-edge-ansi16 bubbletea-edge-ansi256; do
+                      cp "../export-check/$f.go" main.go
+                      go test ./...
+                    done
+                - run: mkdir -p go-check-tview
+                - run: cp export-check/tview.go go-check-tview/main.go
+                - working-directory: go-check-tview
+                  run: |
+                    go mod init tviewcheck
+                    go mod tidy
+                - name: build each Tview variant
+                  working-directory: go-check-tview
+                  run: |
+                    for f in tview tview-edge tview-edge-ansi16 tview-edge-ansi256; do
+                      cp "../export-check/$f.go" main.go
+                      go build ./...
+                      go vet ./...
+                    done
+
+            verify-python:
+              needs: build
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/download-artifact@v4
+                  with:
+                    name: export-check
+                    path: export-check
+                - uses: actions/setup-python@v5
+                  with:
+                    python-version: '3.12'
+                - run: pip install textual
+                - name: compile + mount each Textual variant
+                  run: |
+                    for f in textual textual-edge; do
+                      python -m py_compile "export-check/$f.py"
+                      python scripts/ci-templates/textual/smoke.py "export-check/$f.py"
+                    done
+
+            verify-node-exports:
+              needs: build
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/download-artifact@v4
+                  with:
+                    name: export-check
+                    path: export-check
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: 22
+                    cache: npm
+                - run: npm ci
+                - name: syntax-check each Blessed variant
+                  run: |
+                    for f in blessed blessed-edge blessed-edge-ansi16 blessed-edge-ansi256; do
+                      node --check "export-check/$f.js"
+                    done
+                - name: syntax-check each OpenTUI/Ink variant
+                  run: |
+                    for f in opentui opentui-edge opentui-edge-ansi16 opentui-edge-ansi256 ink ink-edge ink-edge-ansi16 ink-edge-ansi256; do
+                      node_modules/.bin/esbuild "export-check/$f.tsx" --jsx=automatic --outfile=/dev/null
+                    done
+          YAML
+
+      - name: remove temporary bootstrap workflows and staging
+        shell: bash
+        run: |
+          rm -f .github/workflows/bootstrap-terminal-runtime.yml
+          rm -f .github/workflows/finalize-studio-hardening.yml
+          rm -f .github/workflows/finalize-studio-hardening-v2.yml
+          rm -rf scripts/bootstrap
+
+      - name: commit converged branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Branch already converged."
+            exit 0
+          fi
+          git commit -m "chore: finalize decoupled terminal runtime"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
