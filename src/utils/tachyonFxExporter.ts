@@ -23,22 +23,31 @@ function effectKey(effect: EffectDefinition): string {
  * Read authored motion from every representation Syndrid currently persists.
  *
  * v3 EffectDefinition graphs are canonical, while `animations` is retained as a
- * compatibility mirror for Canvas/older .tui projects.  The old exporter chose
- * one representation or the other based only on `effects.length`, which meant
- * a stale/disabled v3 entry could hide a valid enabled legacy mirror.  Export
- * must instead merge both representations and de-duplicate matching ids.
+ * compatibility mirror for Canvas/older .tui projects. Export merges both paths
+ * by effect id. An enabled canonical graph wins; however, an enabled legacy
+ * mirror must rescue a stale/disabled canonical entry so Studio replay and the
+ * production motion plan cannot disagree about whether authored motion exists.
  */
 function authoredEffects(node: ComponentNode): Array<{ effect: EffectDefinition; source: MotionRecord['source'] }> {
   const canonical = node.prototype?.effects ?? [];
   const merged: Array<{ effect: EffectDefinition; source: MotionRecord['source'] }> = canonical.map((effect) => ({ effect, source: 'v3' }));
-  const seen = new Set(canonical.map(effectKey));
+  const indexByKey = new Map(canonical.map((effect, index) => [effectKey(effect), index] as const));
 
   for (const animation of node.prototype?.animations ?? []) {
     const effect = legacyAnimationToEffect(node.id, animation);
     const key = effectKey(effect);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push({ effect, source: 'legacy' });
+    const existingIndex = indexByKey.get(key);
+
+    if (existingIndex === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push({ effect, source: 'legacy' });
+      continue;
+    }
+
+    const existing = merged[existingIndex];
+    if (!existing.effect.enabled && effect.enabled) {
+      merged[existingIndex] = { effect, source: 'legacy' };
+    }
   }
 
   return merged;
@@ -137,7 +146,7 @@ export function exportTachyonFxMotionPlan(root: ComponentNode | null): string {
   const lines = [
     '// Syndrid TUI Studio v3 — production-oriented TachyonFX effect plan',
     '// Canonical source is the structured EffectDefinition graph stored in the .tui file.',
-    '// Legacy animations are merged only as a compatibility source and de-duplicated by effect id.',
+    '// Legacy animations are merged as a compatibility source; enabled mirrors rescue stale/disabled canonical entries.',
     `// Discovery: v3=${stats.canonical} legacy=${stats.legacy} enabled=${stats.enabled}`,
     '// Target TachyonFX family: 0.25.x. Pin the exact compatible version in the consuming Ratatui app.',
     'use ratatui::{layout::Rect, style::Color};',
