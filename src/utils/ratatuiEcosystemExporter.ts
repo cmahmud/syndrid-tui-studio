@@ -1,5 +1,10 @@
 import type { ComponentEcosystemSpec, ComponentNode, SyndridProjectData } from '../types';
-import { RATATUI_ADAPTERS, RATATUI_ECOSYSTEM_LIBRARIES } from '../data/ratatuiEcosystem';
+import {
+  RATATUI_ADAPTERS,
+  RATATUI_ECOSYSTEM_LIBRARIES,
+  defaultEcosystemSpec,
+  recommendedAdapterForType,
+} from '../data/ratatuiEcosystem';
 
 export interface EcosystemBinding {
   componentId: string;
@@ -16,11 +21,34 @@ export interface RatatuiEcosystemExport {
   warnings: string[];
 }
 
+function resolveEcosystemSpec(node: ComponentNode): ComponentEcosystemSpec | null {
+  const explicit = node.prototype?.ecosystem;
+  if (explicit) return explicit.adapter === 'native' ? null : explicit;
+
+  const adapter = recommendedAdapterForType(node.type);
+  if (adapter === 'native') return null;
+  const inferred = defaultEcosystemSpec(adapter);
+
+  // First-class component props seed the richer adapter automatically so a
+  // freshly dropped Image/Terminal/Code component exports correctly before
+  // the user ever opens the Prototype inspector.
+  if (adapter === 'image' && inferred.image) {
+    inferred.image.assetId = typeof node.props.assetId === 'string' && node.props.assetId ? node.props.assetId : undefined;
+  }
+  if (adapter === 'terminal' && inferred.terminal) {
+    inferred.terminal.command = typeof node.props.command === 'string' && node.props.command ? node.props.command : undefined;
+    inferred.terminal.cwd = typeof node.props.cwd === 'string' && node.props.cwd ? node.props.cwd : undefined;
+  }
+  if (adapter === 'syntax-highlight' && inferred.syntax) {
+    inferred.syntax.language = typeof node.props.language === 'string' && node.props.language ? node.props.language : inferred.syntax.language;
+  }
+  return inferred;
+}
+
 export function collectEcosystemBindings(node: ComponentNode | null, out: EcosystemBinding[] = []): EcosystemBinding[] {
   if (!node) return out;
-  if (node.prototype?.ecosystem && node.prototype.ecosystem.adapter !== 'native') {
-    out.push({ componentId: node.id, componentName: node.name, componentType: node.type, spec: node.prototype.ecosystem });
-  }
+  const spec = resolveEcosystemSpec(node);
+  if (spec) out.push({ componentId: node.id, componentName: node.name, componentType: node.type, spec });
   node.children.forEach((child) => collectEcosystemBindings(child, out));
   return out;
 }
@@ -58,8 +86,10 @@ export function exportRatatuiEcosystem(
   if (embedded) dependencies.set('mousefood', `mousefood = { version = "${crateVersion('mousefood', '0.5.2')}", optional = true, default-features = false, features = ["std", "fonts", "framebuffer"] }`);
 
   for (const binding of bindings) {
-    const definition = RATATUI_ADAPTERS.find((entry) => entry.id === binding.spec.adapter);
-    if (!definition) { warnings.push(`${binding.componentName}: unknown adapter ${binding.spec.adapter}`); continue; }
+    if (!RATATUI_ADAPTERS.some((entry) => entry.id === binding.spec.adapter)) {
+      warnings.push(`${binding.componentName}: unknown adapter ${binding.spec.adapter}`);
+      continue;
+    }
     if (binding.spec.adapter === 'image') {
       const assetId = binding.spec.image?.assetId;
       if (!assetId) warnings.push(`${binding.componentName}: ratatui-image adapter has no image asset bound.`);
@@ -70,10 +100,9 @@ export function exportRatatuiEcosystem(
 
   const featureBlock = embedded ? '\n[features]\ndefault = []\nembedded-display = ["dep:mousefood"]\n' : '';
   const cargoSnippet = `[dependencies]\n${[...dependencies.values()].sort().join('\n')}${featureBlock}`;
-
-  const lines: string[] = [
+  const lines = [
     '// Syndrid Ratatui ecosystem integration plan',
-    '// Generated from canonical per-component .tui adapter metadata.',
+    '// Generated from canonical .tui component + adapter metadata.',
     '// Allocate state once in the application model; Frame rendering must stay side-effect free.',
     '',
   ];
@@ -85,37 +114,31 @@ export function exportRatatuiEcosystem(
     switch (binding.spec.adapter) {
       case 'textarea':
         lines.push(`// state: ratatui_textarea::TextArea<'static>; search=${!!binding.spec.textarea?.search}; soft_wrap=${!!binding.spec.textarea?.softWrap}; tab_width=${binding.spec.textarea?.tabWidth ?? 4}`);
-        lines.push('// event path: feed focused crossterm key events into TextArea::input(); render the stateful TextArea widget in this component rect.');
+        lines.push('// feed focused crossterm input to TextArea::input(); render the stateful textarea in this rect.');
         break;
       case 'image': {
         const asset = project.imageAssets.find((item) => item.id === binding.spec.image?.assetId);
         lines.push(`// source=${asset ? stringLiteral(asset.source) : '<unbound>'}; protocol=${binding.spec.image?.protocol ?? 'auto'}; fit=${binding.spec.image?.fit ?? 'contain'}; fallback=${binding.spec.image?.fallback ?? 'alt-text'}`);
-        lines.push('// state: one ratatui_image::protocol::StatefulProtocol created by Picker; render via StatefulImage and resize protocol when the terminal rect changes.');
+        lines.push('// create one ratatui_image StatefulProtocol with Picker and resize it when the terminal rect changes.');
         break;
       }
-      case 'big-text': lines.push('// render with tui_widgets::big_text; derive glyph sizing from the resolved Syndrid component rect.'); break;
-      case 'card': lines.push('// render with tui_widgets card primitives; map Syndrid border/title/style tokens without duplicating state.'); break;
-      case 'popup': lines.push('// render with tui_widgets popup/overlay primitives after base content so z-order remains deterministic.'); break;
-      case 'prompt': lines.push('// persist prompt state in the app model; map focused input events through the prompt API.'); break;
-      case 'scrollview':
-        lines.push(`// persist ScrollViewState; axis=${binding.spec.scroll?.axis ?? 'vertical'}; scrollbar=${binding.spec.scroll?.showScrollbar ?? true}; step=${binding.spec.scroll?.step ?? 1}`);
-        break;
-      case 'tree-widget': lines.push('// persist tui_tree_widget::TreeState and map Syndrid hierarchy/expanded selection into TreeItem values.'); break;
-      case 'widget-list': lines.push('// persist tui_widget_list::ListState and render arbitrary widget rows while retaining component selection semantics.'); break;
+      case 'scrollview': lines.push(`// persist ScrollViewState; axis=${binding.spec.scroll?.axis ?? 'vertical'}; scrollbar=${binding.spec.scroll?.showScrollbar ?? true}; step=${binding.spec.scroll?.step ?? 1}`); break;
+      case 'tree-widget': lines.push('// persist tui_tree_widget::TreeState and map the Syndrid hierarchy into TreeItem values.'); break;
+      case 'widget-list': lines.push('// persist tui_widget_list::ListState; arbitrary widget rows retain Syndrid selection semantics.'); break;
       case 'terminal':
-        lines.push(`// spawn PTY/controller outside render(); command=${stringLiteral(binding.spec.terminal?.command ?? '')}; cwd=${stringLiteral(binding.spec.terminal?.cwd ?? '')}; read_only=${binding.spec.terminal?.readOnly ?? true}`);
-        lines.push('// render the vt100 screen through tui_term::widget::PseudoTerminal; forward input only when focused and read_only=false.');
+        lines.push(`// spawn PTY outside render(); command=${stringLiteral(binding.spec.terminal?.command ?? '')}; cwd=${stringLiteral(binding.spec.terminal?.cwd ?? '')}; read_only=${binding.spec.terminal?.readOnly ?? true}`);
+        lines.push('// feed PTY bytes into tui_term::vt100::Parser and render PseudoTerminal; forward input only while focused.');
         break;
-      case 'syntax-highlight':
-        lines.push(`// syntax language=${stringLiteral(binding.spec.syntax?.language ?? 'rust')}; theme=${stringLiteral(binding.spec.syntax?.theme ?? '')}; line_numbers=${binding.spec.syntax?.lineNumbers ?? false}`);
-        lines.push('// cache tui-syntax-highlight output by content/language/theme; use termprofile conversion for terminal color capability.');
-        break;
+      case 'syntax-highlight': lines.push(`// cache syntax-highlight output by content/language/theme; language=${stringLiteral(binding.spec.syntax?.language ?? 'rust')}; theme=${stringLiteral(binding.spec.syntax?.theme ?? '')}`); break;
       case 'interactive': lines.push(`// ratatui-interact focus/hit-test: mouse=${binding.spec.interaction?.mouse ?? true}; hover=${binding.spec.interaction?.hover ?? true}; click=${binding.spec.interaction?.click ?? true}`); break;
-      case 'node-graph': lines.push(`// tui-nodes graph: orientation=${binding.spec.nodeGraph?.orientation ?? 'horizontal'}; persist graph/navigation state outside render.`); break;
-      case 'ansi-text': lines.push('// parse ANSI once with ansi-to-tui and cache resulting Text/Lines until source content changes.'); break;
-      default: lines.push('// native Ratatui/tui-widgets adapter; preserve Syndrid responsive/state semantics.'); break;
+      case 'node-graph': lines.push(`// tui-nodes graph orientation=${binding.spec.nodeGraph?.orientation ?? 'horizontal'}; persist graph/navigation state outside render.`); break;
+      case 'ansi-text': lines.push('// parse ANSI once with ansi-to-tui and cache resulting Text/Lines until source changes.'); break;
+      case 'big-text': lines.push('// render via tui_widgets::big_text using the resolved component rect.'); break;
+      case 'card': lines.push('// render via tui_widgets::cards with Syndrid border/title/style tokens.'); break;
+      case 'popup': lines.push('// render via tui_widgets::popup after base content for deterministic z-order.'); break;
+      case 'prompt': lines.push('// persist tui-widgets prompt state and route focused input to it.'); break;
     }
-    if (binding.spec.embedded?.enabled) lines.push(`// embedded output: mousefood target=${binding.spec.embedded.target}; color=${binding.spec.embedded.colorMode}; desktop input remains separate.`);
+    if (binding.spec.embedded?.enabled) lines.push(`// mousefood embedded target=${binding.spec.embedded.target}; color=${binding.spec.embedded.colorMode}; desktop input stays separate.`);
     lines.push('');
   }
   if (!bindings.length) lines.push('// No non-native ecosystem adapters are currently assigned.');
