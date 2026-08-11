@@ -5,6 +5,7 @@ import type {
   RatatuiRuntimeLibraries,
   SyndridProjectData,
 } from '../types';
+import { DEFAULT_RATATUI_RUNTIME_LIBRARIES } from '../types';
 import {
   RATATUI_ADAPTERS,
   RATATUI_ECOSYSTEM_LIBRARIES,
@@ -73,10 +74,13 @@ function catalogVersion(id: RatatuiEcosystemLibraryId, fallback: string): string
 
 function stringLiteral(value: string): string { return JSON.stringify(value); }
 
+type EcosystemProjectInput = Pick<SyndridProjectData, 'imageAssets'> & Partial<Pick<SyndridProjectData, 'runtimeLibraries'>>;
+
 export function exportRatatuiEcosystem(
   root: ComponentNode | null,
-  project: Pick<SyndridProjectData, 'imageAssets' | 'runtimeLibraries'>
+  project: EcosystemProjectInput
 ): RatatuiEcosystemExport {
+  const runtimeLibraries = project.runtimeLibraries ?? DEFAULT_RATATUI_RUNTIME_LIBRARIES;
   const bindings = collectEcosystemBindings(root);
   const adapterIds = new Set(bindings.map((binding) => binding.spec.adapter));
   const embedded = bindings.some((binding) => binding.spec.embedded?.enabled);
@@ -99,7 +103,7 @@ export function exportRatatuiEcosystem(
     const requested = overrides.get(id);
     if (requested && requested.size === 1) return [...requested][0];
     if (requested && requested.size > 1) warnings.push(`${id}: conflicting component version overrides (${[...requested].join(', ')}); using project runtime version.`);
-    return projectRuntimeVersion(id, project.runtimeLibraries) ?? catalogVersion(id, fallback);
+    return projectRuntimeVersion(id, runtimeLibraries) ?? catalogVersion(id, fallback);
   };
 
   dependencies.set('ratatui', `ratatui = { version = "${version('ratatui', '0.30.2')}", features = ["crossterm"] }`);
@@ -179,7 +183,7 @@ export function exportRatatuiEcosystem(
 
   const libraries = RATATUI_ECOSYSTEM_LIBRARIES.map((library) => ({
     ...library,
-    version: projectRuntimeVersion(library.id, project.runtimeLibraries) ?? library.version,
+    version: projectRuntimeVersion(library.id, runtimeLibraries) ?? library.version,
   }));
   return { libraries, bindings, cargoSnippet, rustPlan: lines.join('\n'), warnings };
 }
