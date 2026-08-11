@@ -18,8 +18,8 @@ const required = [
   'src/components/editor/DesignSystemPanel.tsx',
   'src/components/editor/TerminalTestModal.tsx',
   'rust/syndrid-ratatui-runtime/src/preview.rs',
-  'src-tauri/src/bin/syndrid-tui-preview.rs',
-  'scripts/prepare-preview-sidecar-v2.mjs',
+  'rust/syndrid-ratatui-runtime/src/bin/syndrid-tui-preview.rs',
+  'scripts/prepare-preview-sidecar-v3.mjs',
 ];
 const missing = required.filter((file) => !existsSync(file));
 if (missing.length) throw new Error(`Missing Syndrid Studio files: ${missing.join(', ')}`);
@@ -88,6 +88,11 @@ if (!tauri.bundle?.externalBin?.includes('binaries/syndrid-tui-preview')) {
 const runtime = readFileSync('rust/syndrid-ratatui-runtime/src/preview.rs', 'utf8');
 for (const marker of ['ratatui::try_init()', 'EffectDsl::new()', 'EffectManager', 'TestBackend']) {
   if (!runtime.includes(marker)) throw new Error(`Native terminal test runtime missing ${marker}`);
+}
+
+const terminalSurface = readFileSync('src/components/editor/TerminalTestModal.tsx', 'utf8');
+if (!terminalSurface.includes("from '@xterm/xterm'") || !terminalSurface.includes('terminal.onData')) {
+  throw new Error('Terminal Test Mode must use a real xterm VT surface.');
 }
 
 console.log('Syndrid TUI Studio structural verification passed.');

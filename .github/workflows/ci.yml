@@ -5,10 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-# Temporary write scope for the one-shot generated lock/snapshot refresh below.
-# This will be removed immediately after the generated files land on the PR branch.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -20,53 +18,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: generate compatible production-audit lock repair
-        run: npm audit fix --package-lock-only
       - name: reject high-severity production dependency advisories
         run: npm audit --omit=dev --audit-level=high
-      - name: apply one-shot React dependency cleanup
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          path = Path('src/components/editor/TerminalTestModal.tsx')
-          text = path.read_text()
-          replacement = """  const projectData = useMemo(
-            () => project.exportProjectData(),
-            [project]
-          );
-
-          const testSpec"""
-          updated, count = re.subn(
-              r"  const projectData = useMemo\([\s\S]*?\n\s*const testSpec",
-              replacement,
-              text,
-              count=1,
-          )
-          if count != 1:
-              raise SystemExit(f'expected one projectData useMemo block, found {count}')
-          path.write_text(updated)
-          PY
       - run: npm run lint
-      - name: run tests and accept intentional integer-terminal-layout snapshot updates
-        run: npm test -- -u
+      - run: npm test
       - run: npm run build
       - run: npm run verify:syndrid
-      - name: commit generated audit, snapshot, and modal cleanup to this same-repository PR
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json src/utils/export/__tests__/__snapshots__/*.snap src/components/editor/TerminalTestModal.tsx
-          if git diff --cached --quiet; then
-            echo "No generated lock/snapshot changes to commit."
-          else
-            git commit -m "chore: refresh audited lockfile and terminal layout snapshots"
-            git push origin "HEAD:${{ github.head_ref }}"
-          fi
       - run: node scripts/generate-export-fixtures.mjs
       - uses: actions/upload-artifact@v4
         with:
@@ -111,6 +68,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - run: npm ci
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -128,6 +87,14 @@ jobs:
           if (-not (Test-Path $sidecar)) { throw "Missing prepared sidecar: $sidecar" }
       - name: verify Windows desktop, PTY, sidecar and ecosystem runtime linkage
         run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+      - name: build release sidecar for installer
+        run: npm run prepare:preview-sidecar:release
+      - name: build NSIS installer
+        run: npm run desktop:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-nsis-smoke
+          path: src-tauri/target/release/bundle/nsis/*.exe
 
   verify-go:
     needs: build
