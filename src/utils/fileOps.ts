@@ -4,7 +4,30 @@ import { useComponentStore } from '../stores/componentStore';
 import { THEMES, useThemeStore } from '../stores/themeStore';
 import { useSelectionStore } from '../stores/selectionStore';
 import { useProjectStore } from '../stores/projectStore';
+import type { ComponentNode } from '../types';
+import { effectToLegacyAnimation, legacyAnimationToEffect } from '../types';
 import { isValidComponentTree } from './validation';
+
+function migrateTreeToV3(node: ComponentNode): ComponentNode {
+  const next = structuredClone(node);
+  const visit = (current: ComponentNode) => {
+    const prototype = current.prototype;
+    if (prototype) {
+      const effects = prototype.effects?.length
+        ? prototype.effects
+        : (prototype.animations ?? []).map((animation) => legacyAnimationToEffect(current.id, animation));
+      current.prototype = {
+        ...prototype,
+        effects,
+        // Keep a compatibility mirror for the current CSS Canvas renderer and older exporters.
+        animations: effects.map(effectToLegacyAnimation),
+      };
+    }
+    current.children.forEach(visit);
+  };
+  visit(next);
+  return next;
+}
 
 /** Build the JSON payload + suggested filename from current store state. */
 export function buildTuiData(): { json: string; suggestedName: string } | null {
@@ -13,10 +36,10 @@ export function buildTuiData(): { json: string; suggestedName: string } | null {
   const theme = useThemeStore.getState().currentTheme;
   const project = useProjectStore.getState().exportProjectData();
   const data = {
-    version: '2',
+    version: '3',
     meta: { name: root.name, theme, savedAt: new Date().toISOString() },
     project,
-    tree: root,
+    tree: migrateTreeToV3(root),
   };
   return {
     json: JSON.stringify(data, null, 2),
@@ -24,11 +47,7 @@ export function buildTuiData(): { json: string; suggestedName: string } | null {
   };
 }
 
-/**
- * Save a JSON payload to disk.
- * Must be called directly from a button click so showSaveFilePicker can get
- * the browser's user-activation token. Falls back to a plain download.
- */
+/** Save a JSON payload to disk, falling back to a browser download. */
 export async function saveTuiData(json: string, filename: string): Promise<void> {
   if ('showSaveFilePicker' in window) {
     try {
@@ -43,10 +62,8 @@ export async function saveTuiData(json: string, filename: string): Promise<void>
       return;
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
-      // fall through to download on unexpected errors
     }
   }
-  // Fallback: trigger browser download
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -62,16 +79,15 @@ export async function openTuiFile(): Promise<void> {
   const load = (text: string) => {
     try {
       const data = JSON.parse(text);
-      if ((data.version === '1' || data.version === '2') && isValidComponentTree(data.tree)) {
-        useComponentStore.getState().setRoot(data.tree);
+      if ((data.version === '1' || data.version === '2' || data.version === '3') && isValidComponentTree(data.tree)) {
+        const migratedTree = migrateTreeToV3(data.tree);
+        useComponentStore.getState().setRoot(migratedTree);
         if (typeof data.meta?.theme === 'string' && data.meta.theme in THEMES) {
           useThemeStore.getState().setTheme(data.meta.theme as keyof typeof THEMES);
         }
-        if (data.version === '2' && data.project && typeof data.project === 'object') {
+        if ((data.version === '2' || data.version === '3') && data.project && typeof data.project === 'object') {
           useProjectStore.getState().setProjectData(data.project);
         } else {
-          // Opening a legacy design must not leak responsive/motion metadata
-          // from whichever v2 project happened to be open previously.
           useProjectStore.getState().resetProject();
         }
         useSelectionStore.getState().clearSelection();

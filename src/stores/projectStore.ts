@@ -2,11 +2,15 @@ import { create } from 'zustand';
 import type {
   ComponentNode,
   DesignTokens,
+  EffectPlaybackSettings,
+  ImageAssetDefinition,
+  RatatuiRuntimeLibraries,
   ReusableComponentDefinition,
   SyndridProjectData,
   ViewportId,
   ViewportPreset,
 } from '../types';
+import { DEFAULT_RATATUI_RUNTIME_LIBRARIES } from '../types';
 import { cloneNode } from '../utils/treeUtils';
 import { isValidComponentTree } from '../utils/validation';
 
@@ -35,13 +39,7 @@ export const DEFAULT_SYNDRID_TOKENS: DesignTokens = {
   },
   spacing: { xs: 0, sm: 1, md: 2, lg: 3, xl: 4 },
   borders: { subtle: 'single', active: 'rounded', strong: 'double', emphasis: 'bold' },
-  motion: {
-    instant: 0,
-    fast: 120,
-    normal: 180,
-    slow: 280,
-    defaultEasing: 'smoothstep',
-  },
+  motion: { instant: 0, fast: 120, normal: 180, slow: 280, defaultEasing: 'smoothstep' },
 };
 
 const DEFAULT_SETTINGS = {
@@ -54,12 +52,17 @@ const DEFAULT_SETTINGS = {
   terminalCellHeightPx: 16,
 };
 
+const DEFAULT_EFFECT_PLAYBACK: EffectPlaybackSettings = {
+  mode: 'normal',
+  speed: 1,
+  loopPreview: false,
+};
+
 interface ProjectState extends SyndridProjectData {
   previewState: string;
   animationPreviewEnabled: boolean;
   animationRevision: number;
   matrixOpen: boolean;
-
   setProjectData: (data: Partial<SyndridProjectData>) => void;
   resetProject: () => void;
   setActiveViewport: (id: ViewportId) => void;
@@ -71,6 +74,10 @@ interface ProjectState extends SyndridProjectData {
   setMatrixOpen: (open: boolean) => void;
   updateTokens: (tokens: DesignTokens) => void;
   updateProjectSettings: (updates: Partial<SyndridProjectData['settings']>) => void;
+  updateEffectPlayback: (updates: Partial<EffectPlaybackSettings>) => void;
+  upsertImageAsset: (asset: ImageAssetDefinition) => void;
+  removeImageAsset: (id: string) => void;
+  updateRuntimeLibraries: (updates: Partial<RatatuiRuntimeLibraries>) => void;
   saveReusableComponent: (name: string, root: ComponentNode, description?: string, tags?: string[]) => string;
   removeReusableComponent: (id: string) => void;
   getReusableComponent: (id: string) => ReusableComponentDefinition | undefined;
@@ -79,12 +86,15 @@ interface ProjectState extends SyndridProjectData {
 
 function initialData(): SyndridProjectData {
   return {
-    version: '2',
+    version: '3',
     settings: { ...DEFAULT_SETTINGS },
     viewports: DEFAULT_VIEWPORTS.map((v) => ({ ...v })),
     activeViewportId: 'narrow',
     designTokens: structuredClone(DEFAULT_SYNDRID_TOKENS),
     reusableComponents: [],
+    effectPlayback: { ...DEFAULT_EFFECT_PLAYBACK },
+    imageAssets: [],
+    runtimeLibraries: structuredClone(DEFAULT_RATATUI_RUNTIME_LIBRARIES),
   };
 }
 
@@ -101,9 +111,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function stringMap(value: unknown, fallback: Record<string, string>): Record<string, string> {
   const next = { ...fallback };
   if (!isRecord(value)) return next;
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string' && item.trim()) next[key] = item;
-  }
+  for (const [key, item] of Object.entries(value)) if (typeof item === 'string' && item.trim()) next[key] = item;
   return next;
 }
 
@@ -122,20 +130,15 @@ function borderMap(value: unknown, fallback: DesignTokens['borders']): DesignTok
   const next = { ...fallback };
   if (!isRecord(value)) return next;
   for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string' && BORDER_STYLES.has(item as DesignTokens['borders'][string])) {
-      next[key] = item as DesignTokens['borders'][string];
-    }
+    if (typeof item === 'string' && BORDER_STYLES.has(item as DesignTokens['borders'][string])) next[key] = item as DesignTokens['borders'][string];
   }
   return next;
 }
 
-const MOTION_EASINGS = new Set<DesignTokens['motion']['defaultEasing']>([
-  'linear', 'ease-in', 'ease-out', 'ease-in-out', 'smoothstep', 'spring',
-]);
+const MOTION_EASINGS = new Set<DesignTokens['motion']['defaultEasing']>(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'smoothstep', 'spring']);
 function normalizeMotionTokens(value: unknown, fallback: DesignTokens['motion']): DesignTokens['motion'] {
   if (!isRecord(value)) return { ...fallback };
-  const defaultEasing = typeof value.defaultEasing === 'string'
-    && MOTION_EASINGS.has(value.defaultEasing as DesignTokens['motion']['defaultEasing'])
+  const defaultEasing = typeof value.defaultEasing === 'string' && MOTION_EASINGS.has(value.defaultEasing as DesignTokens['motion']['defaultEasing'])
     ? value.defaultEasing as DesignTokens['motion']['defaultEasing']
     : fallback.defaultEasing;
   return {
@@ -150,11 +153,7 @@ function normalizeMotionTokens(value: unknown, fallback: DesignTokens['motion'])
 function normalizeReusableComponents(value: unknown): ReusableComponentDefinition[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
-    if (!isRecord(item)) return [];
-    if (typeof item.id !== 'string' || !item.id.trim()) return [];
-    if (typeof item.name !== 'string' || !item.name.trim()) return [];
-    if (!isValidComponentTree(item.root)) return [];
-
+    if (!isRecord(item) || typeof item.id !== 'string' || !item.id.trim() || typeof item.name !== 'string' || !item.name.trim() || !isValidComponentTree(item.root)) return [];
     const now = new Date().toISOString();
     return [{
       id: item.id,
@@ -166,6 +165,36 @@ function normalizeReusableComponents(value: unknown): ReusableComponentDefinitio
       updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : now,
     }];
   });
+}
+
+function normalizeImageAssets(value: unknown): ImageAssetDefinition[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.source !== 'string') return [];
+    return [{
+      id: item.id,
+      name: item.name,
+      source: item.source,
+      alt: typeof item.alt === 'string' ? item.alt : '',
+      fit: ['contain', 'cover', 'stretch', 'original'].includes(String(item.fit)) ? item.fit as ImageAssetDefinition['fit'] : 'contain',
+      alignment: ['start', 'center', 'end'].includes(String(item.alignment)) ? item.alignment as ImageAssetDefinition['alignment'] : 'center',
+      protocol: ['auto', 'kitty', 'sixel', 'iterm2', 'halfblocks'].includes(String(item.protocol)) ? item.protocol as ImageAssetDefinition['protocol'] : 'auto',
+      fallback: ['placeholder', 'alt-text', 'hidden'].includes(String(item.fallback)) ? item.fallback as ImageAssetDefinition['fallback'] : 'placeholder',
+    }];
+  });
+}
+
+function normalizeRuntimeLibraries(value: unknown): RatatuiRuntimeLibraries {
+  const fallback = DEFAULT_RATATUI_RUNTIME_LIBRARIES;
+  if (!isRecord(value)) return structuredClone(fallback);
+  return {
+    tachyonfx: typeof value.tachyonfx === 'string' ? value.tachyonfx : fallback.tachyonfx,
+    ratatuiTextarea: typeof value.ratatuiTextarea === 'string' ? value.ratatuiTextarea : fallback.ratatuiTextarea,
+    tuiWidgets: typeof value.tuiWidgets === 'string' ? value.tuiWidgets : fallback.tuiWidgets,
+    ratatuiImage: typeof value.ratatuiImage === 'string' ? value.ratatuiImage : fallback.ratatuiImage,
+    mousefood: typeof value.mousefood === 'string' ? value.mousefood : undefined,
+    optional: Array.isArray(value.optional) ? value.optional.filter((item): item is string => typeof item === 'string') : [...fallback.optional],
+  };
 }
 
 function normalizeViewport(viewport: ViewportPreset): ViewportPreset | null {
@@ -183,56 +212,51 @@ function normalizeViewport(viewport: ViewportPreset): ViewportPreset | null {
   };
 }
 
-/** Merge a saved/agent-supplied project onto safe defaults instead of trusting partial JSON. */
-export function normalizeProjectData(data?: Partial<SyndridProjectData> | null): SyndridProjectData {
+/** Merge v1/v2/v3 saved or agent-supplied project data onto safe v3 defaults. */
+export function normalizeProjectData(data?: Partial<SyndridProjectData> | Record<string, unknown> | null): SyndridProjectData {
   const base = initialData();
   if (!data || typeof data !== 'object') return base;
-
-  const suppliedViewports = Array.isArray(data.viewports)
-    ? data.viewports.map((item) => normalizeViewport(item)).filter((item): item is ViewportPreset => !!item)
+  const raw = data as Partial<SyndridProjectData>;
+  const suppliedViewports = Array.isArray(raw.viewports)
+    ? raw.viewports.map((item) => normalizeViewport(item)).filter((item): item is ViewportPreset => !!item)
     : [];
   const viewports = suppliedViewports.length > 0 ? suppliedViewports.sort((a, b) => a.order - b.order) : base.viewports;
-
-  const suppliedTokens = isRecord(data.designTokens) ? data.designTokens : undefined;
+  const suppliedTokens = isRecord(raw.designTokens) ? raw.designTokens : undefined;
   const designTokens: DesignTokens = {
-    name: typeof suppliedTokens?.name === 'string' && suppliedTokens.name.trim()
-      ? suppliedTokens.name
-      : base.designTokens.name,
-    description: typeof suppliedTokens?.description === 'string'
-      ? suppliedTokens.description
-      : base.designTokens.description,
+    name: typeof suppliedTokens?.name === 'string' && suppliedTokens.name.trim() ? suppliedTokens.name : base.designTokens.name,
+    description: typeof suppliedTokens?.description === 'string' ? suppliedTokens.description : base.designTokens.description,
     colors: stringMap(suppliedTokens?.colors, base.designTokens.colors),
     spacing: numberMap(suppliedTokens?.spacing, base.designTokens.spacing),
     borders: borderMap(suppliedTokens?.borders, base.designTokens.borders),
     motion: normalizeMotionTokens(suppliedTokens?.motion, base.designTokens.motion),
   };
-
-  const requestedActive = typeof data.activeViewportId === 'string' ? data.activeViewportId : base.activeViewportId;
+  const requestedActive = typeof raw.activeViewportId === 'string' ? raw.activeViewportId : base.activeViewportId;
   const activeViewportId = viewports.some((viewport) => viewport.id === requestedActive)
     ? requestedActive
     : viewports.find((viewport) => viewport.id === 'narrow')?.id ?? viewports[0].id;
-
+  const playback: Record<string, unknown> = isRecord(raw.effectPlayback) ? raw.effectPlayback : {};
   return {
-    version: '2',
+    version: '3',
     settings: {
-      name: typeof data.settings?.name === 'string' && data.settings.name.trim()
-        ? data.settings.name
-        : base.settings.name,
-      description: typeof data.settings?.description === 'string'
-        ? data.settings.description
-        : base.settings.description,
+      name: typeof raw.settings?.name === 'string' && raw.settings.name.trim() ? raw.settings.name : base.settings.name,
+      description: typeof raw.settings?.description === 'string' ? raw.settings.description : base.settings.description,
       targetFramework: 'ratatui',
       animationRuntime: 'tachyonfx',
-      reducedMotionDefault: typeof data.settings?.reducedMotionDefault === 'boolean'
-        ? data.settings.reducedMotionDefault
-        : base.settings.reducedMotionDefault,
-      terminalCellWidthPx: finiteNumber(data.settings?.terminalCellWidthPx, base.settings.terminalCellWidthPx, 4, 32),
-      terminalCellHeightPx: finiteNumber(data.settings?.terminalCellHeightPx, base.settings.terminalCellHeightPx, 8, 64),
+      reducedMotionDefault: typeof raw.settings?.reducedMotionDefault === 'boolean' ? raw.settings.reducedMotionDefault : base.settings.reducedMotionDefault,
+      terminalCellWidthPx: finiteNumber(raw.settings?.terminalCellWidthPx, base.settings.terminalCellWidthPx, 4, 32),
+      terminalCellHeightPx: finiteNumber(raw.settings?.terminalCellHeightPx, base.settings.terminalCellHeightPx, 8, 64),
     },
     viewports,
     activeViewportId,
     designTokens,
-    reusableComponents: normalizeReusableComponents(data.reusableComponents),
+    reusableComponents: normalizeReusableComponents(raw.reusableComponents),
+    effectPlayback: {
+      mode: playback.mode === 'reduced' ? 'reduced' : 'normal',
+      speed: finiteNumber(playback.speed, 1, 0.1, 4),
+      loopPreview: typeof playback.loopPreview === 'boolean' ? playback.loopPreview : false,
+    },
+    imageAssets: normalizeImageAssets(raw.imageAssets),
+    runtimeLibraries: normalizeRuntimeLibraries(raw.runtimeLibraries),
   };
 }
 
@@ -242,65 +266,57 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   animationPreviewEnabled: true,
   animationRevision: 0,
   matrixOpen: false,
-
   setProjectData: (data) => set({ ...normalizeProjectData(data), previewState: 'default', animationRevision: Date.now() }),
   resetProject: () => set({ ...initialData(), previewState: 'default', animationRevision: Date.now() }),
-
   setActiveViewport: (id) => set({ activeViewportId: id }),
-  upsertViewport: (viewport) =>
-    set((state) => {
-      const normalized = normalizeViewport(viewport);
-      if (!normalized) return {};
-      const existing = state.viewports.findIndex((v) => v.id === normalized.id);
-      const next = state.viewports.map((v) => ({ ...v }));
-      if (existing >= 0) next[existing] = normalized;
-      else next.push(normalized);
-      return { viewports: next.sort((a, b) => a.order - b.order) };
-    }),
-  removeViewport: (id) =>
-    set((state) => {
-      const remaining = state.viewports.filter((v) => v.id !== id);
-      const viewports = remaining.length > 0 ? remaining : DEFAULT_VIEWPORTS.map((v) => ({ ...v }));
-      const activeViewportId = state.activeViewportId === id
-        ? viewports.find((v) => v.id === 'narrow')?.id ?? viewports[0].id
-        : state.activeViewportId;
-      return { viewports, activeViewportId };
-    }),
-
+  upsertViewport: (viewport) => set((state) => {
+    const normalized = normalizeViewport(viewport);
+    if (!normalized) return {};
+    const existing = state.viewports.findIndex((v) => v.id === normalized.id);
+    const next = state.viewports.map((v) => ({ ...v }));
+    if (existing >= 0) next[existing] = normalized;
+    else next.push(normalized);
+    return { viewports: next.sort((a, b) => a.order - b.order) };
+  }),
+  removeViewport: (id) => set((state) => {
+    const remaining = state.viewports.filter((v) => v.id !== id);
+    const viewports = remaining.length > 0 ? remaining : DEFAULT_VIEWPORTS.map((v) => ({ ...v }));
+    return {
+      viewports,
+      activeViewportId: state.activeViewportId === id ? viewports.find((v) => v.id === 'narrow')?.id ?? viewports[0].id : state.activeViewportId,
+    };
+  }),
   setPreviewState: (previewState) => set({ previewState }),
   toggleAnimationPreview: () => set((state) => ({ animationPreviewEnabled: !state.animationPreviewEnabled })),
   replayAnimations: () => set({ animationRevision: Date.now() }),
   setMatrixOpen: (matrixOpen) => set({ matrixOpen }),
   updateTokens: (designTokens) => set({ designTokens }),
   updateProjectSettings: (updates) => set((state) => ({ settings: { ...state.settings, ...updates } })),
-
+  updateEffectPlayback: (updates) => set((state) => ({ effectPlayback: { ...state.effectPlayback, ...updates } })),
+  upsertImageAsset: (asset) => set((state) => ({ imageAssets: [...state.imageAssets.filter((item) => item.id !== asset.id), asset] })),
+  removeImageAsset: (id) => set((state) => ({ imageAssets: state.imageAssets.filter((item) => item.id !== id) })),
+  updateRuntimeLibraries: (updates) => set((state) => ({ runtimeLibraries: { ...state.runtimeLibraries, ...updates } })),
   saveReusableComponent: (name, root, description = '', tags = []) => {
     const id = `component-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const now = new Date().toISOString();
-    const definition: ReusableComponentDefinition = {
-      id,
-      name,
-      description,
-      tags,
-      root: cloneNode(root),
-      createdAt: now,
-      updatedAt: now,
-    };
+    const definition: ReusableComponentDefinition = { id, name, description, tags, root: cloneNode(root), createdAt: now, updatedAt: now };
     set((state) => ({ reusableComponents: [...state.reusableComponents, definition] }));
     return id;
   },
-  removeReusableComponent: (id) =>
-    set((state) => ({ reusableComponents: state.reusableComponents.filter((item) => item.id !== id) })),
+  removeReusableComponent: (id) => set((state) => ({ reusableComponents: state.reusableComponents.filter((item) => item.id !== id) })),
   getReusableComponent: (id) => get().reusableComponents.find((item) => item.id === id),
   exportProjectData: () => {
     const state = get();
     return {
-      version: '2',
+      version: '3',
       settings: structuredClone(state.settings),
       viewports: structuredClone(state.viewports),
       activeViewportId: state.activeViewportId,
       designTokens: structuredClone(state.designTokens),
       reusableComponents: state.reusableComponents.map((item) => ({ ...item, root: cloneNode(item.root) })),
+      effectPlayback: structuredClone(state.effectPlayback),
+      imageAssets: structuredClone(state.imageAssets),
+      runtimeLibraries: structuredClone(state.runtimeLibraries),
     };
   },
 }));
