@@ -113,11 +113,10 @@ jobs:
           - PTY sessions and temporary preview specs are removed when the child exits or the Studio session is stopped.
           DOC
 
-      - name: remove temporary convergence scaffolding
+      - name: remove temporary non-workflow scaffolding
         shell: bash
         run: |
           rm -rf scripts/bootstrap
-          rm -f .github/workflows/finalize-studio-hardening-v2.yml
 
       - name: commit converged branch
         shell: bash
