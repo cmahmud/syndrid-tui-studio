@@ -1,5 +1,6 @@
 import type { ComponentNode, ComponentStateOverride, ResponsiveOverride } from '../types';
 import { cloneNode } from './treeUtils';
+import { resolveAuthoredEffects } from './motionResolver';
 
 function mergeOverride(node: ComponentNode, override: ResponsiveOverride | ComponentStateOverride): void {
   if (override.props) node.props = { ...node.props, ...override.props };
@@ -10,8 +11,8 @@ function mergeOverride(node: ComponentNode, override: ResponsiveOverride | Compo
 
 /**
  * Resolve a design tree for one terminal viewport and one prototype state.
- * This never mutates the editor source tree: responsive/state overrides remain
- * explicit design intent that can be inspected and handed to an implementation agent.
+ * Hidden descendants are pruned after overrides are applied: terminal layout
+ * must treat hidden content as absent rather than reserving cells/gaps for it.
  */
 export function resolveTreeForPreview(
   root: ComponentNode | null,
@@ -24,13 +25,12 @@ export function resolveTreeForPreview(
   const visit = (node: ComponentNode) => {
     const responsive = node.responsive?.[viewportId];
     if (responsive) mergeOverride(node, responsive);
-
     if (stateName !== 'default') {
       const state = node.prototype?.states?.[stateName];
       if (state) mergeOverride(node, state);
     }
-
     node.children.forEach(visit);
+    node.children = node.children.filter((child) => !child.hidden);
   };
 
   visit(resolved);
@@ -44,7 +44,6 @@ export function collectResponsiveOverrides(root: ComponentNode | null): Array<{
 }> {
   const result: Array<{ id: string; name: string; viewports: string[] }> = [];
   if (!root) return result;
-
   const visit = (node: ComponentNode) => {
     const viewports = Object.keys(node.responsive ?? {});
     if (viewports.length) result.push({ id: node.id, name: node.name, viewports });
@@ -71,7 +70,6 @@ export function collectPrototypeSummary(root: ComponentNode | null): Array<{
     keyBindings: string[];
   }> = [];
   if (!root) return result;
-
   const visit = (node: ComponentNode) => {
     if (node.prototype) {
       result.push({
@@ -79,7 +77,7 @@ export function collectPrototypeSummary(root: ComponentNode | null): Array<{
         name: node.name,
         focusable: !!node.prototype.focusable,
         states: Object.keys(node.prototype.states ?? {}),
-        animations: (node.prototype.animations ?? []).map((animation) => animation.name),
+        animations: resolveAuthoredEffects(node).map(({ effect }) => effect.name),
         keyBindings: (node.prototype.keyBindings ?? []).map((binding) => `${binding.key}: ${binding.action}`),
       });
     }
