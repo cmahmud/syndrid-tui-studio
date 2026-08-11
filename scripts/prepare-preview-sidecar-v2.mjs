@@ -10,8 +10,9 @@ const profile = release ? 'release' : 'debug';
 const extension = process.platform === 'win32' ? '.exe' : '';
 const rustc = process.env.RUSTC || 'rustc';
 const cargo = process.env.CARGO || 'cargo';
-const targetTriple = execFileSync(rustc, ['--print', 'host-tuple'], { encoding: 'utf8' }).trim();
-if (!targetTriple) throw new Error('rustc did not report a host target tuple');
+const versionInfo = execFileSync(rustc, ['-vV'], { encoding: 'utf8' });
+const targetTriple = versionInfo.match(/^host:\s*(.+)$/m)?.[1]?.trim();
+if (!targetTriple) throw new Error('rustc -vV did not report a host target triple');
 
 const args = [
   'build',
