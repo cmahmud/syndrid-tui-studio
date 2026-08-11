@@ -15,9 +15,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: reject high-severity production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm run verify:syndrid
       - run: node scripts/generate-export-fixtures.mjs
       - uses: actions/upload-artifact@v4
         with:
@@ -39,7 +42,7 @@ jobs:
           workspaces: |
             rust-check
             rust/syndrid-ratatui-runtime
-      - name: verify Syndrid Ratatui ecosystem runtime
+      - name: verify Syndrid Ratatui ecosystem and native terminal runtime
         run: |
           cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
           cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
@@ -59,14 +62,26 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             rust/syndrid-ratatui-runtime
             src-tauri
-      - name: verify Windows desktop, PTY and ecosystem runtime linkage
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: build the exact Windows terminal preview sidecar source
+        run: npm run prepare:preview-sidecar
+      - name: verify sidecar target-triple artifact exists
+        shell: pwsh
+        run: |
+          $hostLine = (rustc -vV | Select-String '^host:').Line
+          $triple = ($hostLine -replace '^host:\s*', '').Trim()
+          $sidecar = "src-tauri/binaries/syndrid-tui-preview-$triple.exe"
+          if (-not (Test-Path $sidecar)) { throw "Missing prepared sidecar: $sidecar" }
+      - name: verify Windows desktop, PTY, sidecar and ecosystem runtime linkage
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
   verify-go:
     needs: build
