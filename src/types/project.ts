@@ -1,4 +1,10 @@
 import type { ComponentNode, ComponentProps, LayoutProps, StyleProps } from './components';
+import type {
+  EffectDefinition,
+  EffectPlaybackSettings,
+  ImageAssetDefinition,
+  RatatuiRuntimeLibraries,
+} from './effects';
 
 export type ViewportId = 'wide' | 'medium' | 'narrow' | 'short' | string;
 
@@ -38,6 +44,7 @@ export interface ComponentStateOverride {
   note?: string;
 }
 
+/** @deprecated v3 stores authored motion in ComponentPrototypeSpec.effects. */
 export type AnimationTrigger =
   | 'on-enter'
   | 'on-exit'
@@ -50,6 +57,7 @@ export type AnimationTrigger =
   | 'on-error'
   | 'manual';
 
+/** @deprecated v3 uses TachyonFxPrimitive. Kept for .tui v1/v2 migration and Canvas compatibility. */
 export type AnimationEffect =
   | 'fade'
   | 'slide'
@@ -70,6 +78,7 @@ export type AnimationEasing =
   | 'smoothstep'
   | 'spring';
 
+/** @deprecated v3 uses EffectDefinition. */
 export interface AnimationSpec {
   id: string;
   name: string;
@@ -97,6 +106,9 @@ export interface ComponentPrototypeSpec {
   focusOrder?: number;
   defaultState?: PrototypeStateName;
   states?: Record<PrototypeStateName, ComponentStateOverride>;
+  /** Canonical Syndrid v3 TachyonFX graph definitions. */
+  effects?: EffectDefinition[];
+  /** Legacy v1/v2 motion; v3 keeps it as a preview/export compatibility mirror. */
   animations?: AnimationSpec[];
   keyBindings?: KeyBindingSpec[];
 }
@@ -137,10 +149,13 @@ export interface ProjectSettings {
 }
 
 export interface SyndridProjectData {
-  version: '2';
+  version: '3';
   settings: ProjectSettings;
   viewports: ViewportPreset[];
   activeViewportId: ViewportId;
   designTokens: DesignTokens;
   reusableComponents: ReusableComponentDefinition[];
+  effectPlayback: EffectPlaybackSettings;
+  imageAssets: ImageAssetDefinition[];
+  runtimeLibraries: RatatuiRuntimeLibraries;
 }
