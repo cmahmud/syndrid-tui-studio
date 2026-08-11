@@ -1,77 +1,13 @@
-import type { AnimationSpec, ComponentNode, EffectDefinition, EffectTarget } from '../types';
-import { legacyAnimationToEffect } from '../types';
+import type {
+  AnimationSpec,
+  ComponentNode,
+  EffectDefinition,
+  EffectTarget,
+  RatatuiRuntimeLibraries,
+} from '../types';
+import { DEFAULT_RATATUI_RUNTIME_LIBRARIES, legacyAnimationToEffect } from '../types';
 import { effectToTachyonFxDsl } from './tachyonFxDsl';
-
-interface MotionRecord {
-  componentId: string;
-  componentName: string;
-  effect: EffectDefinition;
-  source: 'v3' | 'legacy';
-}
-
-interface MotionCollectionStats {
-  canonical: number;
-  legacy: number;
-  enabled: number;
-}
-
-function effectKey(effect: EffectDefinition): string {
-  return effect.id || `${effect.name}:${effect.trigger.kind}`;
-}
-
-/**
- * Read authored motion from every representation Syndrid currently persists.
- *
- * v3 EffectDefinition graphs are canonical, while `animations` is retained as a
- * compatibility mirror for Canvas/older .tui projects. Export merges both paths
- * by effect id. An enabled canonical graph wins; however, an enabled legacy
- * mirror must rescue a stale/disabled canonical entry so Studio replay and the
- * production motion plan cannot disagree about whether authored motion exists.
- */
-function authoredEffects(node: ComponentNode): Array<{ effect: EffectDefinition; source: MotionRecord['source'] }> {
-  const canonical = node.prototype?.effects ?? [];
-  const merged: Array<{ effect: EffectDefinition; source: MotionRecord['source'] }> = canonical.map((effect) => ({ effect, source: 'v3' }));
-  const indexByKey = new Map(canonical.map((effect, index) => [effectKey(effect), index] as const));
-
-  for (const animation of node.prototype?.animations ?? []) {
-    const effect = legacyAnimationToEffect(node.id, animation);
-    const key = effectKey(effect);
-    const existingIndex = indexByKey.get(key);
-
-    if (existingIndex === undefined) {
-      indexByKey.set(key, merged.length);
-      merged.push({ effect, source: 'legacy' });
-      continue;
-    }
-
-    const existing = merged[existingIndex];
-    if (!existing.effect.enabled && effect.enabled) {
-      merged[existingIndex] = { effect, source: 'legacy' };
-    }
-  }
-
-  return merged;
-}
-
-function collect(
-  node: ComponentNode | null,
-  out: MotionRecord[] = [],
-  stats: MotionCollectionStats = { canonical: 0, legacy: 0, enabled: 0 }
-): { records: MotionRecord[]; stats: MotionCollectionStats } {
-  if (!node) return { records: out, stats };
-
-  stats.canonical += node.prototype?.effects?.length ?? 0;
-  stats.legacy += node.prototype?.animations?.length ?? 0;
-
-  for (const { effect, source } of authoredEffects(node)) {
-    if (!effect.enabled) continue;
-    stats.enabled += 1;
-    out.push({ componentId: node.id, componentName: node.name, effect, source });
-  }
-
-  node.children.forEach((child) => collect(child, out, stats));
-  return { records: out, stats };
-}
+import { collectAuthoredEffects } from './motionResolver';
 
 function rustIdent(value: string): string {
   const cleaned = value.replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1');
@@ -142,12 +78,12 @@ export function animationToTachyonFxDsl(animation: AnimationSpec, reducedMotion 
 }
 
 export function exportTachyonFxMotionPlan(root: ComponentNode | null): string {
-  const { records, stats } = collect(root);
+  const { records, stats } = collectAuthoredEffects(root, { enabledOnly: true });
   const lines = [
     '// Syndrid TUI Studio v3 — production-oriented TachyonFX effect plan',
-    '// Canonical source is the structured EffectDefinition graph stored in the .tui file.',
-    '// Legacy animations are merged as a compatibility source; enabled mirrors rescue stale/disabled canonical entries.',
-    `// Discovery: v3=${stats.canonical} legacy=${stats.legacy} enabled=${stats.enabled}`,
+    '// Canonical source is the unified authored-motion resolver used by preview, save, MCP and export.',
+    '// v3 EffectDefinition graphs win unless an enabled legacy mirror rescues a stale/disabled same-id graph.',
+    `// Discovery: v3=${stats.canonical} legacy=${stats.legacy} resolved=${stats.resolved} enabled=${stats.enabled} rescuedLegacy=${stats.rescuedLegacy}`,
     '// Target TachyonFX family: 0.25.x. Pin the exact compatible version in the consuming Ratatui app.',
     'use ratatui::{layout::Rect, style::Color};',
     'use tachyonfx::{fx, CellFilter, Effect, EffectManager, EffectTimer, Interpolation, Motion};',
@@ -168,7 +104,7 @@ export function exportTachyonFxMotionPlan(root: ComponentNode | null): string {
     lines.push(`// ${componentName} (${componentId}) · ${targetComment(effect.target)} · trigger=${effect.trigger.kind} · source=${source}`);
     if (effect.notes) lines.push(`// ${effect.notes.replace(/\r?\n/g, ' ')}`);
     lines.push(`fn ${fnName}(reduced_motion: bool) -> Effect {`);
-    lines.push(`    let mut effect = if reduced_motion {`);
+    lines.push('    let mut effect = if reduced_motion {');
     lines.push(`        ${effectToTachyonFxDsl(effect, true)}`);
     lines.push('    } else {');
     lines.push(`        ${effectToTachyonFxDsl(effect, false)}`);
@@ -191,18 +127,31 @@ export function exportTachyonFxMotionPlan(root: ComponentNode | null): string {
   return lines.join('\n');
 }
 
-export function exportTachyonFxCargoSnippet(): string {
+function version(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed || fallback;
+}
+
+/**
+ * Generate one dependency block from the same project runtime version map used
+ * by the ecosystem exporter and terminal test runtime. This intentionally
+ * avoids hard-coded historical versions drifting away from the v3 project.
+ */
+export function exportTachyonFxCargoSnippet(
+  libraries: RatatuiRuntimeLibraries = DEFAULT_RATATUI_RUNTIME_LIBRARIES
+): string {
   return [
     '[dependencies]',
-    'ratatui = "0.30"',
-    'tachyonfx = "0.25"',
-    'ratatui-textarea = "0.7"',
-    'tui-widgets = "0.3"',
-    'ratatui-image = "8"',
+    `ratatui = "${version(libraries.ratatui, DEFAULT_RATATUI_RUNTIME_LIBRARIES.ratatui ?? '0.30.2')}"`,
+    `tachyonfx = "${version(libraries.tachyonfx, DEFAULT_RATATUI_RUNTIME_LIBRARIES.tachyonfx)}"`,
+    `ratatui-textarea = "${version(libraries.ratatuiTextarea, DEFAULT_RATATUI_RUNTIME_LIBRARIES.ratatuiTextarea)}"`,
+    `tui-widgets = "${version(libraries.tuiWidgets, DEFAULT_RATATUI_RUNTIME_LIBRARIES.tuiWidgets)}"`,
+    `ratatui-image = "${version(libraries.ratatuiImage, DEFAULT_RATATUI_RUNTIME_LIBRARIES.ratatuiImage)}"`,
+    `ansi-to-tui = "${version(libraries.ansiToTui, DEFAULT_RATATUI_RUNTIME_LIBRARIES.ansiToTui ?? '8.0.1')}"`,
+    ...(libraries.mousefood ? [`mousefood = { version = "${libraries.mousefood}", optional = true, default-features = false, features = ["std", "fonts", "framebuffer"] }`] : []),
     '',
     '# Optional authoring/runtime helpers represented by the Syndrid project spec:',
-    '# tui-scrollview, tui-tree-widget, tui-widget-list, tui-term, ratatui-interact,',
-    '# tui-syntax-highlight, tui-nodes, termprofile, ansi-to-tui',
+    `# ${libraries.optional.join(', ') || 'none'}`,
     '# mousefood is an optional embedded-graphics backend target, not desktop mouse input.',
   ].join('\n');
 }
