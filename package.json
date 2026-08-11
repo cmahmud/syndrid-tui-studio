@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
-    "mcp-server": "node mcp-server/index.mjs",
+    "mcp-server": "node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify:syndrid": "node scripts/verify-syndrid.mjs",
