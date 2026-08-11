@@ -19,7 +19,7 @@ wss.on('error', (err) => {
 wss.on('connection', (socket) => {
   activeSocket = socket;
   connectedSince = new Date().toISOString();
-  console.error(`Syndrid TUI Studio bridge: browser tab connected (${wss.clients.size} total)`);
+  console.error(`Syndrid TUI Studio bridge: authenticated browser tab connected (${wss.clients.size} total)`);
   socket.on('message', (raw) => {
     let msg; try { msg = JSON.parse(raw.toString()); } catch { return; }
     const entry = pending.get(msg.id); if (!entry) return;
@@ -32,27 +32,29 @@ wss.on('connection', (socket) => {
 function callBrowser(action, payload = {}, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     if (!activeSocket || activeSocket.readyState !== activeSocket.OPEN) {
-      const message = 'No Syndrid TUI Studio browser tab connected — open the app and enable Agent Bridge in Settings.';
+      const message = 'No Syndrid TUI Studio desktop tab connected — open the app and enable Agent Bridge in Settings.';
       lastError = { message, code: 'NOT_CONNECTED', at: new Date().toISOString() };
       reject(new Error(message)); return;
     }
     const id = randomUUID();
-    const timer = setTimeout(() => { pending.delete(id); const message = 'Browser tab did not respond in time.'; lastError = { message, code: 'TIMEOUT', at: new Date().toISOString() }; reject(new Error(message)); }, timeoutMs);
+    const timer = setTimeout(() => { pending.delete(id); const message = 'Studio desktop did not respond in time.'; lastError = { message, code: 'TIMEOUT', at: new Date().toISOString() }; reject(new Error(message)); }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
     activeSocket.send(JSON.stringify({ id, action, payload }));
   });
 }
 
-const server = new McpServer({ name: 'syndrid-tui-studio', version: '3.1.0' });
+const server = new McpServer({ name: 'syndrid-tui-studio', version: '3.2.0' });
 const READ_ONLY = new Set([
   'get_bridge_status','get_tree','get_project_spec','get_viewports','get_design_tokens','export_motion_plan','export_tachyonfx_rust',
   'render_responsive_matrix','list_reusable_components','get_layout_warnings','list_templates','render_preview','list_component_types',
   'get_component_schema','list_effect_catalog','list_effects','get_effect','get_effect_dsl','validate_effect_dsl','get_effect_playback',
   'render_effect_frame','list_image_assets','list_ratatui_libraries','list_ratatui_adapters','get_component_ecosystem','export_ratatui_ecosystem',
+  'list_test_scenarios','get_terminal_test_spec',
 ]);
 const NON_DESTRUCTIVE = new Set([
   'set_viewport','set_preview_state','replay_animations','effect_playback','save_reusable_component','insert_reusable_component',
   'add_component','duplicate_component','duplicate_effect','create_effect','upsert_image_asset','set_component_ecosystem','apply_ratatui_adapter','clear_component_ecosystem',
+  'set_terminal_test_settings','upsert_test_scenario',
 ]);
 function tool(name, config, handler) {
   const readOnly = READ_ONLY.has(name);
@@ -133,9 +135,9 @@ function defaultEcosystem(adapter = 'native') {
 }
 
 // Health + project inspection
-tool('get_bridge_status', { title: 'Get bridge status', description: 'Reports live Studio bridge health and last transport error.', inputSchema: {} }, () => ({ connected: !!activeSocket && activeSocket.readyState === activeSocket.OPEN, port: PORT, connectedSince, lastError }));
+tool('get_bridge_status', { title: 'Get bridge status', description: 'Reports live Studio bridge health and last transport error.', inputSchema: {} }, () => ({ connected: !!activeSocket && activeSocket.readyState === activeSocket.OPEN, port: PORT, authenticated: true, connectedSince, lastError }));
 tool('get_tree', { title: 'Get component tree', description: 'Returns the complete current component tree.', inputSchema: {} }, () => callBrowser('get_tree'));
-tool('get_project_spec', { title: 'Get Syndrid implementation spec', description: 'Returns the portable v3 Ratatui design spec including responsive previews, effect graphs, ecosystem adapters, image assets and production projections.', inputSchema: {} }, () => callBrowser('get_project_spec', {}, 10000));
+tool('get_project_spec', { title: 'Get Syndrid implementation spec', description: 'Returns the portable v3 Ratatui design spec including responsive previews, effect graphs, ecosystem adapters, image assets, test scenarios and production projections.', inputSchema: {} }, () => callBrowser('get_project_spec', {}, 10000));
 tool('get_viewports', { title: 'Get responsive viewports', description: 'Lists Wide/Medium/Narrow/Short and custom terminal breakpoints.', inputSchema: {} }, () => callBrowser('get_viewports'));
 tool('get_design_tokens', { title: 'Get design tokens', description: 'Returns semantic colors, spacing, borders and motion tokens.', inputSchema: {} }, () => callBrowser('get_design_tokens'));
 tool('update_design_tokens', { title: 'Update design tokens', description: 'Merges validated semantic design tokens into the project.', inputSchema: { tokens: z.record(z.string(), z.unknown()) } }, ({ tokens }) => callBrowser('update_design_tokens', { tokens }));
@@ -145,11 +147,11 @@ tool('render_responsive_matrix', { title: 'Render responsive matrix', descriptio
 tool('update_responsive_override', { title: 'Update responsive override', description: 'Sets or clears a component override for one viewport.', inputSchema: { id: z.string(), viewportId: z.string(), override: z.record(z.string(), z.unknown()).nullable() } }, (args) => callBrowser('update_responsive_override', args));
 tool('set_preview_state', { title: 'Set prototype preview state', description: 'Switches component-state preview.', inputSchema: { state: z.string() } }, ({ state }) => callBrowser('set_preview_state', { state }));
 tool('render_preview', { title: 'Render preview', description: 'Renders the current terminal design as text or ANSI.', inputSchema: { format: z.enum(['text','ansi']).optional() } }, ({ format }) => callBrowser('render_preview', { format: format ?? 'text' }));
-tool('get_layout_warnings', { title: 'Get layout warnings', description: 'Returns overflow and negative-space diagnostics.', inputSchema: {} }, () => callBrowser('get_layout_warnings'));
+tool('get_layout_warnings', { title: 'Get layout warnings', description: 'Returns overflow and negative-space diagnostics from the same resolved viewport/state path as Studio.', inputSchema: {} }, () => callBrowser('get_layout_warnings'));
 
 // TachyonFX v3
 tool('list_effect_catalog', { title: 'List TachyonFX effects', description: 'Returns the Studio effect library with category, parameter schema, defaults, spatial-pattern support and composition metadata.', inputSchema: {} }, () => callBrowser('list_effect_catalog'));
-tool('list_effects', { title: 'List authored effects', description: 'Lists v3 EffectDefinition graphs, optionally scoped to one component.', inputSchema: { componentId: z.string().optional() } }, (args) => callBrowser('list_effects', args));
+tool('list_effects', { title: 'List authored effects', description: 'Lists unified v3/legacy EffectDefinition graphs, optionally scoped to one component.', inputSchema: { componentId: z.string().optional() } }, (args) => callBrowser('list_effects', args));
 tool('get_effect', { title: 'Get effect', description: 'Returns one structured effect plus generated normal/reduced DSL and duration.', inputSchema: { componentId: z.string(), effectId: z.string() } }, (args) => callBrowser('get_effect', args));
 tool('create_effect', { title: 'Create TachyonFX effect', description: 'Adds a catalog primitive to a component as a canonical structured effect.', inputSchema: { componentId: z.string(), primitive: z.string().optional(), name: z.string().optional() } }, (args) => callBrowser('create_effect', args));
 tool('update_effect', { title: 'Update effect', description: 'Merges effect metadata such as name, enabled state or structured graph.', inputSchema: { componentId: z.string(), effectId: z.string(), patch: z.record(z.string(), z.unknown()) } }, (args) => callBrowser('update_effect', args));
@@ -165,9 +167,16 @@ tool('set_reduced_motion', { title: 'Set reduced-motion variant', description: '
 tool('effect_playback', { title: 'Control effect playback', description: 'Play, pause, replay, reset, scrub, change speed, or switch normal/reduced preview mode.', inputSchema: { operation: z.enum(['play','pause','replay','reset','scrub','speed','mode']), elapsedMs: z.number().optional(), speed: z.number().optional(), mode: z.enum(['normal','reduced']).optional() } }, (args) => callBrowser('effect_playback', args));
 tool('get_effect_playback', { title: 'Inspect effect playback', description: 'Returns current playback state, elapsed time, speed and accessibility mode.', inputSchema: {} }, () => callBrowser('get_effect_playback'));
 tool('render_effect_frame', { title: 'Evaluate effect frame', description: 'Deterministically evaluates the active primitive nodes at a requested elapsed time.', inputSchema: { componentId: z.string(), effectId: z.string(), elapsedMs: z.number().optional(), reducedMotion: z.boolean().optional() } }, (args) => callBrowser('render_effect_frame', args));
-tool('replay_animations', { title: 'Replay authored motion', description: 'Restarts both legacy Canvas compatibility previews and the v3 effect preview controller.', inputSchema: {} }, () => callBrowser('replay_animations'));
-tool('export_motion_plan', { title: 'Export TachyonFX motion plan', description: 'Returns production-oriented Rust for all enabled v3 effects.', inputSchema: {} }, () => callBrowser('export_motion_plan'));
-tool('export_tachyonfx_rust', { title: 'Export TachyonFX Rust', description: 'Returns production-oriented effect Rust plus Cargo dependency guidance.', inputSchema: {} }, () => callBrowser('export_tachyonfx_rust'));
+tool('replay_animations', { title: 'Replay authored motion', description: 'Restarts both Canvas compatibility previews and the v3 effect preview controller.', inputSchema: {} }, () => callBrowser('replay_animations'));
+tool('export_motion_plan', { title: 'Export TachyonFX motion plan', description: 'Returns production-oriented Rust for all enabled effects from the same canonical resolver used by Studio.', inputSchema: {} }, () => callBrowser('export_motion_plan'));
+tool('export_tachyonfx_rust', { title: 'Export TachyonFX Rust', description: 'Returns production-oriented effect Rust plus project-version-coherent Cargo guidance.', inputSchema: {} }, () => callBrowser('export_tachyonfx_rust'));
+
+// Native Terminal Test Mode
+tool('list_test_scenarios', { title: 'List terminal test scenarios', description: 'Lists deterministic built-in fake-data scenarios, custom persisted scenarios and current Terminal Test Mode settings.', inputSchema: {} }, () => callBrowser('list_test_scenarios'));
+tool('get_terminal_test_spec', { title: 'Build terminal test spec', description: 'Builds the exact portable spec consumed by the real Ratatui/TachyonFX native preview runtime.', inputSchema: { settings: z.record(z.string(), z.unknown()).optional() } }, ({ settings }) => callBrowser('get_terminal_test_spec', { settings }, 10000));
+tool('set_terminal_test_settings', { title: 'Update terminal test settings', description: 'Updates viewport, scenario, speed, reduced-motion, loop, fake-data, hot-reload and interaction settings persisted in the v3 project.', inputSchema: { settings: z.record(z.string(), z.unknown()) } }, ({ settings }) => callBrowser('set_terminal_test_settings', { settings }));
+tool('upsert_test_scenario', { title: 'Create or update terminal test scenario', description: 'Persists a deterministic custom fake-data/timeline scenario in the v3 project.', inputSchema: { scenario: z.record(z.string(), z.unknown()) } }, ({ scenario }) => callBrowser('upsert_test_scenario', { scenario }));
+tool('remove_test_scenario', { title: 'Remove terminal test scenario', description: 'Deletes one persisted custom terminal test scenario.', inputSchema: { id: z.string() } }, ({ id }) => callBrowser('remove_test_scenario', { id }));
 
 // Ratatui ecosystem authoring. These tools deliberately build on the existing
 // generic prototype action, so older Studio tabs fail gracefully instead of
@@ -217,4 +226,4 @@ tool('ungroup_components', { title: 'Ungroup components', description: 'Promotes
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error(`Syndrid TUI Studio MCP server ready. Bridge listening on ws://127.0.0.1:${PORT}`);
+console.error(`Syndrid TUI Studio MCP server ready. Token-protected bridge listening on ws://127.0.0.1:${PORT}`);
