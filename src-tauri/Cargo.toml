@@ -15,3 +15,4 @@ tauri-build = { version = "=2.6.3", features = [] }
 
 [dependencies]
 tauri = { version = "=2.11.5", features = [] }
+syndrid-ratatui-runtime = { path = "../rust/syndrid-ratatui-runtime", features = ["advanced"] }
