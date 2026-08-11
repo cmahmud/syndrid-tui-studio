@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod adapters;
+
 pub use ansi_to_tui;
 pub use ratatui;
 pub use ratatui_image;
