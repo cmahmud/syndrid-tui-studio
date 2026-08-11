@@ -7,6 +7,8 @@ import type {
   RatatuiRuntimeLibraries,
   ReusableComponentDefinition,
   SyndridProjectData,
+  TerminalTestScenario,
+  TerminalTestSettings,
   ViewportId,
   ViewportPreset,
 } from '../types';
@@ -58,6 +60,19 @@ const DEFAULT_EFFECT_PLAYBACK: EffectPlaybackSettings = {
   loopPreview: false,
 };
 
+export const DEFAULT_TERMINAL_TEST_SETTINGS: TerminalTestSettings = {
+  viewportId: 'narrow',
+  scenarioId: 'default',
+  speed: 1,
+  reducedMotion: false,
+  loop: false,
+  fakeData: true,
+  hotReload: true,
+  interactive: true,
+  showDebugOverlay: true,
+  startAtMs: 0,
+};
+
 interface ProjectState extends SyndridProjectData {
   previewState: string;
   animationPreviewEnabled: boolean;
@@ -78,6 +93,9 @@ interface ProjectState extends SyndridProjectData {
   upsertImageAsset: (asset: ImageAssetDefinition) => void;
   removeImageAsset: (id: string) => void;
   updateRuntimeLibraries: (updates: Partial<RatatuiRuntimeLibraries>) => void;
+  updateTerminalTest: (updates: Partial<TerminalTestSettings>) => void;
+  upsertTestScenario: (scenario: TerminalTestScenario) => void;
+  removeTestScenario: (id: string) => void;
   saveReusableComponent: (name: string, root: ComponentNode, description?: string, tags?: string[]) => string;
   removeReusableComponent: (id: string) => void;
   getReusableComponent: (id: string) => ReusableComponentDefinition | undefined;
@@ -95,6 +113,8 @@ function initialData(): SyndridProjectData {
     effectPlayback: { ...DEFAULT_EFFECT_PLAYBACK },
     imageAssets: [],
     runtimeLibraries: structuredClone(DEFAULT_RATATUI_RUNTIME_LIBRARIES),
+    testScenarios: [],
+    terminalTest: { ...DEFAULT_TERMINAL_TEST_SETTINGS },
   };
 }
 
@@ -111,7 +131,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function stringMap(value: unknown, fallback: Record<string, string>): Record<string, string> {
   const next = { ...fallback };
   if (!isRecord(value)) return next;
-  for (const [key, item] of Object.entries(value)) if (typeof item === 'string' && item.trim()) next[key] = item;
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === 'string' && item.trim()) next[key] = item;
+  }
   return next;
 }
 
@@ -130,17 +152,22 @@ function borderMap(value: unknown, fallback: DesignTokens['borders']): DesignTok
   const next = { ...fallback };
   if (!isRecord(value)) return next;
   for (const [key, item] of Object.entries(value)) {
-    if (typeof item === 'string' && BORDER_STYLES.has(item as DesignTokens['borders'][string])) next[key] = item as DesignTokens['borders'][string];
+    if (typeof item === 'string' && BORDER_STYLES.has(item as DesignTokens['borders'][string])) {
+      next[key] = item as DesignTokens['borders'][string];
+    }
   }
   return next;
 }
 
-const MOTION_EASINGS = new Set<DesignTokens['motion']['defaultEasing']>(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'smoothstep', 'spring']);
+const MOTION_EASINGS = new Set<DesignTokens['motion']['defaultEasing']>([
+  'linear', 'ease-in', 'ease-out', 'ease-in-out', 'smoothstep', 'spring',
+]);
 function normalizeMotionTokens(value: unknown, fallback: DesignTokens['motion']): DesignTokens['motion'] {
   if (!isRecord(value)) return { ...fallback };
-  const defaultEasing = typeof value.defaultEasing === 'string' && MOTION_EASINGS.has(value.defaultEasing as DesignTokens['motion']['defaultEasing'])
-    ? value.defaultEasing as DesignTokens['motion']['defaultEasing']
-    : fallback.defaultEasing;
+  const defaultEasing = typeof value.defaultEasing === 'string'
+    && MOTION_EASINGS.has(value.defaultEasing as DesignTokens['motion']['defaultEasing'])
+      ? value.defaultEasing as DesignTokens['motion']['defaultEasing']
+      : fallback.defaultEasing;
   return {
     instant: finiteNumber(value.instant, fallback.instant, 0, 60_000),
     fast: finiteNumber(value.fast, fallback.fast, 0, 60_000),
@@ -153,7 +180,12 @@ function normalizeMotionTokens(value: unknown, fallback: DesignTokens['motion'])
 function normalizeReusableComponents(value: unknown): ReusableComponentDefinition[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
-    if (!isRecord(item) || typeof item.id !== 'string' || !item.id.trim() || typeof item.name !== 'string' || !item.name.trim() || !isValidComponentTree(item.root)) return [];
+    if (!isRecord(item)
+      || typeof item.id !== 'string'
+      || !item.id.trim()
+      || typeof item.name !== 'string'
+      || !item.name.trim()
+      || !isValidComponentTree(item.root)) return [];
     const now = new Date().toISOString();
     return [{
       id: item.id,
@@ -184,16 +216,26 @@ function normalizeImageAssets(value: unknown): ImageAssetDefinition[] {
   });
 }
 
-function normalizeRuntimeLibraries(value: unknown): RatatuiRuntimeLibraries {
+function validVersion(value: unknown, fallback: string | undefined): string | undefined {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed || fallback;
+}
+
+export function normalizeRuntimeLibraries(value: unknown): RatatuiRuntimeLibraries {
   const fallback = DEFAULT_RATATUI_RUNTIME_LIBRARIES;
   if (!isRecord(value)) return structuredClone(fallback);
   return {
-    tachyonfx: typeof value.tachyonfx === 'string' ? value.tachyonfx : fallback.tachyonfx,
-    ratatuiTextarea: typeof value.ratatuiTextarea === 'string' ? value.ratatuiTextarea : fallback.ratatuiTextarea,
-    tuiWidgets: typeof value.tuiWidgets === 'string' ? value.tuiWidgets : fallback.tuiWidgets,
-    ratatuiImage: typeof value.ratatuiImage === 'string' ? value.ratatuiImage : fallback.ratatuiImage,
-    mousefood: typeof value.mousefood === 'string' ? value.mousefood : undefined,
-    optional: Array.isArray(value.optional) ? value.optional.filter((item): item is string => typeof item === 'string') : [...fallback.optional],
+    ratatui: validVersion(value.ratatui, fallback.ratatui),
+    tachyonfx: validVersion(value.tachyonfx, fallback.tachyonfx) ?? fallback.tachyonfx,
+    ratatuiTextarea: validVersion(value.ratatuiTextarea, fallback.ratatuiTextarea) ?? fallback.ratatuiTextarea,
+    tuiWidgets: validVersion(value.tuiWidgets, fallback.tuiWidgets) ?? fallback.tuiWidgets,
+    ratatuiImage: validVersion(value.ratatuiImage, fallback.ratatuiImage) ?? fallback.ratatuiImage,
+    mousefood: validVersion(value.mousefood, fallback.mousefood),
+    ansiToTui: validVersion(value.ansiToTui, fallback.ansiToTui),
+    optional: Array.isArray(value.optional)
+      ? [...new Set(value.optional.filter((item): item is string => typeof item === 'string' && !!item.trim()).map((item) => item.trim()))]
+      : [...fallback.optional],
   };
 }
 
@@ -206,9 +248,76 @@ function normalizeViewport(viewport: ViewportPreset): ViewportPreset | null {
     ...viewport,
     id: viewport.id.trim() || `custom-${Date.now().toString(36)}`,
     label: viewport.label.trim() || 'Custom',
-    width: Math.max(20, Math.min(200, Math.round(width))),
-    height: Math.max(10, Math.min(100, Math.round(height))),
+    width: Math.max(20, Math.min(240, Math.round(width))),
+    height: Math.max(10, Math.min(120, Math.round(height))),
     order: Number.isFinite(Number(viewport.order)) ? Number(viewport.order) : 999,
+  };
+}
+
+const TEST_PRESETS = new Set<TerminalTestScenario['preset']>([
+  'default', 'empty', 'loading', 'loaded', 'error', 'offline', 'slow-network', 'large-data', 'unicode', 'custom',
+]);
+
+function normalizeTestScenarios(value: unknown): TerminalTestScenario[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.id !== 'string' || !item.id.trim() || seen.has(item.id)) return [];
+    const id = item.id.trim();
+    seen.add(id);
+    const rawTimeline = Array.isArray(item.timeline) ? item.timeline : [];
+    const timeline = rawTimeline.flatMap((entry) => {
+      if (!isRecord(entry)) return [];
+      return [{
+        atMs: finiteNumber(entry.atMs, 0, 0, 600_000),
+        componentId: typeof entry.componentId === 'string' ? entry.componentId : undefined,
+        property: typeof entry.property === 'string' ? entry.property : undefined,
+        value: entry.value,
+        state: typeof entry.state === 'string' ? entry.state : undefined,
+        event: typeof entry.event === 'string' ? entry.event : undefined,
+      }];
+    }).sort((a, b) => a.atMs - b.atMs);
+    return [{
+      id,
+      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : id,
+      preset: typeof item.preset === 'string' && TEST_PRESETS.has(item.preset as TerminalTestScenario['preset'])
+        ? item.preset as TerminalTestScenario['preset']
+        : 'custom',
+      seed: Math.round(finiteNumber(item.seed, 42, -2_147_483_648, 2_147_483_647)),
+      durationMs: Math.round(finiteNumber(item.durationMs, 4_000, 100, 600_000)),
+      variables: isRecord(item.variables) ? structuredClone(item.variables) : {},
+      timeline,
+    }];
+  });
+}
+
+function normalizeTerminalTest(
+  value: unknown,
+  viewports: ViewportPreset[],
+  scenarios: TerminalTestScenario[]
+): TerminalTestSettings {
+  const fallback = DEFAULT_TERMINAL_TEST_SETTINGS;
+  if (!isRecord(value)) return { ...fallback };
+  const requestedViewport = typeof value.viewportId === 'string' ? value.viewportId : fallback.viewportId;
+  const viewportId = viewports.some((viewport) => viewport.id === requestedViewport)
+    ? requestedViewport
+    : viewports.find((viewport) => viewport.id === 'narrow')?.id ?? viewports[0].id;
+  const scenarioId = typeof value.scenarioId === 'string' && value.scenarioId.trim()
+    ? value.scenarioId.trim()
+    : fallback.scenarioId;
+  return {
+    viewportId,
+    scenarioId: scenarioId.startsWith('custom:') && !scenarios.some((scenario) => `custom:${scenario.id}` === scenarioId)
+      ? fallback.scenarioId
+      : scenarioId,
+    speed: finiteNumber(value.speed, fallback.speed, 0.1, 4),
+    reducedMotion: typeof value.reducedMotion === 'boolean' ? value.reducedMotion : fallback.reducedMotion,
+    loop: typeof value.loop === 'boolean' ? value.loop : fallback.loop,
+    fakeData: typeof value.fakeData === 'boolean' ? value.fakeData : fallback.fakeData,
+    hotReload: typeof value.hotReload === 'boolean' ? value.hotReload : fallback.hotReload,
+    interactive: typeof value.interactive === 'boolean' ? value.interactive : fallback.interactive,
+    showDebugOverlay: typeof value.showDebugOverlay === 'boolean' ? value.showDebugOverlay : fallback.showDebugOverlay,
+    startAtMs: Math.round(finiteNumber(value.startAtMs, fallback.startAtMs, 0, 600_000)),
   };
 }
 
@@ -235,6 +344,7 @@ export function normalizeProjectData(data?: Partial<SyndridProjectData> | Record
     ? requestedActive
     : viewports.find((viewport) => viewport.id === 'narrow')?.id ?? viewports[0].id;
   const playback: Record<string, unknown> = isRecord(raw.effectPlayback) ? raw.effectPlayback : {};
+  const testScenarios = normalizeTestScenarios(raw.testScenarios);
   return {
     version: '3',
     settings: {
@@ -257,6 +367,8 @@ export function normalizeProjectData(data?: Partial<SyndridProjectData> | Record
     },
     imageAssets: normalizeImageAssets(raw.imageAssets),
     runtimeLibraries: normalizeRuntimeLibraries(raw.runtimeLibraries),
+    testScenarios,
+    terminalTest: normalizeTerminalTest(raw.terminalTest, viewports, testScenarios),
   };
 }
 
@@ -281,9 +393,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   removeViewport: (id) => set((state) => {
     const remaining = state.viewports.filter((v) => v.id !== id);
     const viewports = remaining.length > 0 ? remaining : DEFAULT_VIEWPORTS.map((v) => ({ ...v }));
+    const fallbackViewport = viewports.find((v) => v.id === 'narrow')?.id ?? viewports[0].id;
     return {
       viewports,
-      activeViewportId: state.activeViewportId === id ? viewports.find((v) => v.id === 'narrow')?.id ?? viewports[0].id : state.activeViewportId,
+      activeViewportId: state.activeViewportId === id ? fallbackViewport : state.activeViewportId,
+      terminalTest: state.terminalTest.viewportId === id
+        ? { ...state.terminalTest, viewportId: fallbackViewport }
+        : state.terminalTest,
     };
   }),
   setPreviewState: (previewState) => set({ previewState }),
@@ -295,11 +411,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   updateEffectPlayback: (updates) => set((state) => ({ effectPlayback: { ...state.effectPlayback, ...updates } })),
   upsertImageAsset: (asset) => set((state) => ({ imageAssets: [...state.imageAssets.filter((item) => item.id !== asset.id), asset] })),
   removeImageAsset: (id) => set((state) => ({ imageAssets: state.imageAssets.filter((item) => item.id !== id) })),
-  updateRuntimeLibraries: (updates) => set((state) => ({ runtimeLibraries: { ...state.runtimeLibraries, ...updates } })),
+  updateRuntimeLibraries: (updates) => set((state) => ({
+    runtimeLibraries: normalizeRuntimeLibraries({ ...state.runtimeLibraries, ...updates }),
+  })),
+  updateTerminalTest: (updates) => set((state) => ({
+    terminalTest: normalizeTerminalTest({ ...state.terminalTest, ...updates }, state.viewports, state.testScenarios),
+  })),
+  upsertTestScenario: (scenario) => set((state) => {
+    const normalized = normalizeTestScenarios([scenario])[0];
+    if (!normalized) return {};
+    return { testScenarios: [...state.testScenarios.filter((item) => item.id !== normalized.id), normalized] };
+  }),
+  removeTestScenario: (id) => set((state) => ({
+    testScenarios: state.testScenarios.filter((item) => item.id !== id),
+    terminalTest: state.terminalTest.scenarioId === `custom:${id}`
+      ? { ...state.terminalTest, scenarioId: 'default' }
+      : state.terminalTest,
+  })),
   saveReusableComponent: (name, root, description = '', tags = []) => {
     const id = `component-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const now = new Date().toISOString();
-    const definition: ReusableComponentDefinition = { id, name, description, tags, root: cloneNode(root), createdAt: now, updatedAt: now };
+    const definition: ReusableComponentDefinition = {
+      id, name, description, tags, root: cloneNode(root), createdAt: now, updatedAt: now,
+    };
     set((state) => ({ reusableComponents: [...state.reusableComponents, definition] }));
     return id;
   },
@@ -317,6 +451,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       effectPlayback: structuredClone(state.effectPlayback),
       imageAssets: structuredClone(state.imageAssets),
       runtimeLibraries: structuredClone(state.runtimeLibraries),
+      testScenarios: structuredClone(state.testScenarios),
+      terminalTest: structuredClone(state.terminalTest),
     };
   },
 }));
