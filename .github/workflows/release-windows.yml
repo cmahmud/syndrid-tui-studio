@@ -12,7 +12,7 @@ jobs:
   build-windows:
     name: Build Windows x64 installer
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -30,14 +30,26 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Reject high-severity production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Lint
         run: npm run lint
 
       - name: Run tests
         run: npm test
 
+      - name: Structural verification
+        run: npm run verify:syndrid
+
       - name: Build frontend
         run: npm run build
+
+      - name: Build release terminal-preview sidecar
+        run: npm run prepare:preview-sidecar:release
+
+      - name: Verify Windows desktop and sidecar linkage
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
       - name: Build and publish Windows installer
         uses: tauri-apps/tauri-action@v1
