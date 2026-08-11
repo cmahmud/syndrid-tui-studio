@@ -5,17 +5,21 @@ import { THEMES, useThemeStore } from '../stores/themeStore';
 import { useSelectionStore } from '../stores/selectionStore';
 import { useProjectStore } from '../stores/projectStore';
 import type { ComponentNode } from '../types';
-import { effectToLegacyAnimation, legacyAnimationToEffect } from '../types';
+import { effectToLegacyAnimation } from '../types';
+import { canonicalEffects } from './motionResolver';
 import { isValidComponentTree } from './validation';
 
-function migrateTreeToV3(node: ComponentNode): ComponentNode {
+/**
+ * Upgrade a validated component tree to the canonical v3 representation.
+ * The same authored-motion resolver is used by preview, MCP and exporters so
+ * a compatibility mirror can never silently disagree with production export.
+ */
+export function migrateTreeToV3(node: ComponentNode): ComponentNode {
   const next = structuredClone(node);
   const visit = (current: ComponentNode) => {
     const prototype = current.prototype;
     if (prototype) {
-      const effects = prototype.effects?.length
-        ? prototype.effects
-        : (prototype.animations ?? []).map((animation) => legacyAnimationToEffect(current.id, animation));
+      const effects = canonicalEffects(current);
       current.prototype = {
         ...prototype,
         effects,
