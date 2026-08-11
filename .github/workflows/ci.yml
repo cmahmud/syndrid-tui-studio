@@ -24,13 +24,8 @@ jobs:
           name: export-check
           path: export-check/
 
-  # The steps below hand the exporter's actual generated output — the
-  # kitchen-sink fixture, the style-edge-cases fixture (gradient/justify/
-  # align/gap), and its ansi16/ansi256 color-tier variants — to each target
-  # language's real toolchain. This catches drift (a bad escape, a broken
-  # import, an upstream API change) that string-snapshot tests alone would
-  # miss. See scripts/generate-export-fixtures.mjs.
-
+  # Generated fixture output is passed through each target's real toolchain so
+  # exporter drift is caught alongside the source Studio/runtime checks.
   verify-rust:
     needs: build
     runs-on: ubuntu-latest
@@ -50,7 +45,8 @@ jobs:
         run: |
           cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
           cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
-          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --features embedded
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+          cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
       - run: mkdir -p rust-check/src
       - run: cp scripts/ci-templates/rust/Cargo.toml rust-check/Cargo.toml
       - name: build each Ratatui variant
