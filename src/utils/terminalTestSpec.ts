@@ -240,7 +240,7 @@ export function buildTerminalTestSpec(
           height: Math.max(0, Math.round(layout.height)),
         },
         props: structuredClone(node.props),
-        style: structuredClone(node.style),
+        style: structuredClone(node.style) as unknown as Record<string, unknown>,
         events: structuredClone(node.events),
         focusable: node.prototype?.focusable ?? ['TextInput', 'TextArea', 'Button', 'Checkbox', 'Radio', 'Select', 'Toggle', 'List', 'Table', 'Tree', 'Menu', 'Tabs'].includes(node.type),
         focusOrder: Number.isFinite(Number(node.prototype?.focusOrder)) ? Number(node.prototype?.focusOrder) : nodes.length,
