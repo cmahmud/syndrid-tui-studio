@@ -2,8 +2,8 @@ name: Release Windows Desktop App
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -56,12 +56,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v0.6.1
-          releaseName: 'Syndrid TUI Studio v0.6.1'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Syndrid TUI Studio ${{ github.ref_name }}'
           releaseBody: |
-            Windows x64 release of Syndrid TUI Studio v0.6.1.
-
-            This release includes the Studio hardening pass and real Terminal Test Mode: canonical `.tui` v3/TachyonFX handling, responsive/layout correctness fixes, deterministic mock scenarios, native Ratatui + TachyonFX execution through PTY/ConPTY, xterm terminal emulation, MCP bridge hardening, and expanded CI/security coverage.
+            Windows x64 release of Syndrid TUI Studio.
 
             Download the `-setup.exe` asset below and run it to install the app.
           generateReleaseNotes: true
