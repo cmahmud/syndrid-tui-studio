@@ -27,12 +27,6 @@ export function getExportWarnings(root: ComponentNode | null, format: string): s
   return warnings;
 }
 
-function currentRatatuiHeader(source: string): string {
-  return source
-    .replace('// Requires: ratatui = "0.28"', '// Requires: ratatui = "0.30.2"')
-    .replace('ratatui = { version = "0.28", features = ["crossterm"] }', 'ratatui = { version = "0.30.2", features = ["crossterm"] }');
-}
-
 /** Export design to framework-specific code. */
 export function exportToCode(
   root: ComponentNode | null,
@@ -47,7 +41,7 @@ export function exportToCode(
     case 'bubbletea': return exportToBubbleTea(root, colorMode);
     case 'blessed': return exportToBlessed(root, colorMode);
     case 'textual': return exportToTextual(root);
-    case 'ratatui': return currentRatatuiHeader(exportToRatatui(root, colorMode));
+    case 'ratatui': return exportToRatatui(root, colorMode);
     case 'tview': return exportToTview(root, colorMode);
     default: return `// Unsupported export format: ${format}`;
   }
