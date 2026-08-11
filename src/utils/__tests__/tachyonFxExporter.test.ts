@@ -71,7 +71,24 @@ describe('TachyonFX motion export', () => {
     expect(out).toContain('Discovery: v3=1 legacy=1 enabled=1');
   });
 
-  it('prefers the canonical v3 graph when its legacy compatibility mirror has the same id', () => {
+  it('lets an enabled legacy mirror rescue a stale disabled v3 effect with the same id', () => {
+    const root = component();
+    const staleCanonical = makePrimitiveEffect(root.id, 'fade_from', 'Stale canonical comet');
+    staleCanonical.id = 'loading-comet';
+    staleCanonical.enabled = false;
+    root.prototype = {
+      effects: [staleCanonical],
+      animations: [motion({ id: 'loading-comet', name: 'Loading comet', enabled: true })],
+    };
+
+    const out = exportTachyonFxMotionPlan(root);
+    expect(out).not.toContain('No enabled TachyonFX effects have been authored yet.');
+    expect(out.match(/fn effect_loading_comet/g)).toHaveLength(1);
+    expect(out).toContain('source=legacy');
+    expect(out).toContain('Discovery: v3=1 legacy=1 enabled=1');
+  });
+
+  it('prefers the enabled canonical v3 graph when its legacy compatibility mirror has the same id', () => {
     const root = component();
     const canonical = makePrimitiveEffect(root.id, 'slide_in', 'Canonical comet');
     canonical.id = 'shared-motion';
