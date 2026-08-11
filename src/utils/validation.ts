@@ -221,7 +221,11 @@ export function isValidComponentEcosystem(value: unknown): boolean {
   }
   if (value.interaction !== undefined) {
     if (!isRecord(value.interaction)) return false;
-    if (!['focusable', 'mouse', 'hover', 'click'].every((key) => value.interaction === undefined || value.interaction[key] === undefined || typeof value.interaction[key] === 'boolean')) return false;
+    const interaction = value.interaction;
+    for (const key of ['focusable', 'mouse', 'hover', 'click']) {
+      const item = interaction[key];
+      if (item !== undefined && typeof item !== 'boolean') return false;
+    }
   }
   if (value.nodeGraph !== undefined) {
     if (!isRecord(value.nodeGraph)) return false;
