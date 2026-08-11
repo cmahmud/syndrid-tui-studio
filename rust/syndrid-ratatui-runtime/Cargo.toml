@@ -16,6 +16,7 @@ desktop = [
     "ratatui-image/image-defaults",
 ]
 advanced = [
+    "ratatui/unstable-rendered-line-info",
     "dep:tui-tree-widget",
     "dep:tui-widget-list",
     "dep:tui-term",
