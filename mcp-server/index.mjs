@@ -43,14 +43,17 @@ function callBrowser(action, payload = {}, timeoutMs = 5000) {
   });
 }
 
-const server = new McpServer({ name: 'syndrid-tui-studio', version: '3.0.0' });
+const server = new McpServer({ name: 'syndrid-tui-studio', version: '3.1.0' });
 const READ_ONLY = new Set([
   'get_bridge_status','get_tree','get_project_spec','get_viewports','get_design_tokens','export_motion_plan','export_tachyonfx_rust',
   'render_responsive_matrix','list_reusable_components','get_layout_warnings','list_templates','render_preview','list_component_types',
   'get_component_schema','list_effect_catalog','list_effects','get_effect','get_effect_dsl','validate_effect_dsl','get_effect_playback',
-  'render_effect_frame','list_image_assets',
+  'render_effect_frame','list_image_assets','list_ratatui_libraries','list_ratatui_adapters','get_component_ecosystem','export_ratatui_ecosystem',
 ]);
-const NON_DESTRUCTIVE = new Set(['set_viewport','set_preview_state','replay_animations','effect_playback','save_reusable_component','insert_reusable_component','add_component','duplicate_component','duplicate_effect','create_effect','upsert_image_asset']);
+const NON_DESTRUCTIVE = new Set([
+  'set_viewport','set_preview_state','replay_animations','effect_playback','save_reusable_component','insert_reusable_component',
+  'add_component','duplicate_component','duplicate_effect','create_effect','upsert_image_asset','set_component_ecosystem','apply_ratatui_adapter','clear_component_ecosystem',
+]);
 function tool(name, config, handler) {
   const readOnly = READ_ONLY.has(name);
   server.registerTool(name, {
@@ -75,10 +78,64 @@ function tool(name, config, handler) {
 const record = () => z.record(z.string(), z.unknown()).optional();
 const dryRun = () => z.boolean().optional().describe('Compute the change without committing it.');
 
+const RATATUI_LIBRARIES = [
+  { id: 'ratatui', crateName: 'ratatui', version: '0.30.2', status: 'core', purpose: 'Core terminal rendering and layout' },
+  { id: 'tachyonfx', crateName: 'tachyonfx', version: '0.25.1', status: 'integrated', purpose: 'Effects, timing, composition and spatial patterns' },
+  { id: 'ratatui-textarea', crateName: 'ratatui-textarea', version: '0.9.2', status: 'integrated', purpose: 'Stateful multiline text and code editing' },
+  { id: 'tui-widgets', crateName: 'tui-widgets', version: '0.7.10', status: 'integrated', purpose: 'Big text, cards, popup, prompts, scrollbar and scrollview' },
+  { id: 'ratatui-image', crateName: 'ratatui-image', version: '11.0.6', status: 'integrated', purpose: 'Kitty, Sixel, iTerm2 and half-block images' },
+  { id: 'mousefood', crateName: 'mousefood', version: '0.5.2', status: 'integrated', purpose: 'Embedded-graphics backend for physical displays' },
+  { id: 'ansi-to-tui', crateName: 'ansi-to-tui', version: '8.0.1', status: 'integrated', purpose: 'ANSI terminal output conversion' },
+  { id: 'tui-tree-widget', crateName: 'tui-tree-widget', version: 'managed', status: 'optional', purpose: 'Stateful hierarchy rendering' },
+  { id: 'tui-widget-list', crateName: 'tui-widget-list', version: 'managed', status: 'optional', purpose: 'Rich arbitrary-widget lists' },
+  { id: 'tui-term', crateName: 'tui-term', version: 'managed', status: 'optional', purpose: 'PTY terminal widget' },
+  { id: 'ratatui-interact', crateName: 'ratatui-interact', version: 'managed', status: 'optional', purpose: 'Focus and pointer interaction' },
+  { id: 'tui-syntax-highlight', crateName: 'tui-syntax-highlight', version: 'managed', status: 'optional', purpose: 'Syntax highlighted code' },
+  { id: 'tui-nodes', crateName: 'tui-nodes', version: 'managed', status: 'optional', purpose: 'Node graph visualization' },
+  { id: 'termprofile', crateName: 'termprofile', version: 'managed', status: 'optional', purpose: 'Terminal capability profiling' },
+];
+const RATATUI_ADAPTERS = [
+  { id: 'native', label: 'Native Ratatui', library: 'ratatui', recommendedTypes: [] },
+  { id: 'textarea', label: 'Ratatui Textarea', library: 'ratatui-textarea', recommendedTypes: ['TextArea','TextInput'] },
+  { id: 'image', label: 'Ratatui Image', library: 'ratatui-image', recommendedTypes: ['Box','Text'] },
+  { id: 'big-text', label: 'Big Text', library: 'tui-widgets', recommendedTypes: ['Text'] },
+  { id: 'card', label: 'Card', library: 'tui-widgets', recommendedTypes: ['Box'] },
+  { id: 'popup', label: 'Popup', library: 'tui-widgets', recommendedTypes: ['Modal','Box'] },
+  { id: 'prompt', label: 'Prompt', library: 'tui-widgets', recommendedTypes: ['TextInput','Select','Radio'] },
+  { id: 'scrollview', label: 'Scroll View', library: 'tui-widgets', recommendedTypes: ['Box','Log','Table','List'] },
+  { id: 'tree-widget', label: 'Tree Widget', library: 'tui-tree-widget', recommendedTypes: ['Tree'] },
+  { id: 'widget-list', label: 'Widget List', library: 'tui-widget-list', recommendedTypes: ['List','Menu'] },
+  { id: 'terminal', label: 'Terminal / PTY', library: 'tui-term', recommendedTypes: ['Box','Log'] },
+  { id: 'interactive', label: 'Interactive', library: 'ratatui-interact', recommendedTypes: ['Button','List','Table','Tree'] },
+  { id: 'syntax-highlight', label: 'Syntax Highlight', library: 'tui-syntax-highlight', recommendedTypes: ['Text','TextArea','Log'] },
+  { id: 'node-graph', label: 'Node Graph', library: 'tui-nodes', recommendedTypes: ['Box'] },
+  { id: 'ansi-text', label: 'ANSI Text', library: 'ansi-to-tui', recommendedTypes: ['Text','Log'] },
+];
+const ADAPTER_IDS = new Set(RATATUI_ADAPTERS.map((item) => item.id));
+function findTreeNode(node, id) {
+  if (!node) return null;
+  if (node.id === id) return node;
+  for (const child of node.children ?? []) { const found = findTreeNode(child, id); if (found) return found; }
+  return null;
+}
+function defaultEcosystem(adapter = 'native') {
+  return {
+    adapter,
+    textarea: { search: true, softWrap: true, lineNumbers: false, tabWidth: 4, editorMode: 'standard' },
+    image: { fit: 'contain', alignment: 'center', protocol: 'auto', fallback: 'alt-text', preserveAspectRatio: true },
+    scroll: { axis: 'vertical', showScrollbar: true, step: 1 },
+    terminal: { scrollback: 10000, readOnly: true },
+    syntax: { language: 'rust', theme: 'base16-ocean.dark', lineNumbers: false },
+    interaction: { focusable: true, mouse: true, hover: true, click: true },
+    nodeGraph: { orientation: 'horizontal', showPorts: true, showLabels: true },
+    embedded: { enabled: false, backend: 'mousefood', target: 'simulator', colorMode: 'rgb565' },
+  };
+}
+
 // Health + project inspection
 tool('get_bridge_status', { title: 'Get bridge status', description: 'Reports live Studio bridge health and last transport error.', inputSchema: {} }, () => ({ connected: !!activeSocket && activeSocket.readyState === activeSocket.OPEN, port: PORT, connectedSince, lastError }));
 tool('get_tree', { title: 'Get component tree', description: 'Returns the complete current component tree.', inputSchema: {} }, () => callBrowser('get_tree'));
-tool('get_project_spec', { title: 'Get Syndrid implementation spec', description: 'Returns the portable v3 Ratatui design spec including responsive previews, effect graphs, TachyonFX DSL/Rust projections, image assets and runtime-library intent.', inputSchema: {} }, () => callBrowser('get_project_spec', {}, 10000));
+tool('get_project_spec', { title: 'Get Syndrid implementation spec', description: 'Returns the portable v3 Ratatui design spec including responsive previews, effect graphs, ecosystem adapters, image assets and production projections.', inputSchema: {} }, () => callBrowser('get_project_spec', {}, 10000));
 tool('get_viewports', { title: 'Get responsive viewports', description: 'Lists Wide/Medium/Narrow/Short and custom terminal breakpoints.', inputSchema: {} }, () => callBrowser('get_viewports'));
 tool('get_design_tokens', { title: 'Get design tokens', description: 'Returns semantic colors, spacing, borders and motion tokens.', inputSchema: {} }, () => callBrowser('get_design_tokens'));
 tool('update_design_tokens', { title: 'Update design tokens', description: 'Merges validated semantic design tokens into the project.', inputSchema: { tokens: z.record(z.string(), z.unknown()) } }, ({ tokens }) => callBrowser('update_design_tokens', { tokens }));
@@ -112,13 +169,36 @@ tool('replay_animations', { title: 'Replay authored motion', description: 'Resta
 tool('export_motion_plan', { title: 'Export TachyonFX motion plan', description: 'Returns production-oriented Rust for all enabled v3 effects.', inputSchema: {} }, () => callBrowser('export_motion_plan'));
 tool('export_tachyonfx_rust', { title: 'Export TachyonFX Rust', description: 'Returns production-oriented effect Rust plus Cargo dependency guidance.', inputSchema: {} }, () => callBrowser('export_tachyonfx_rust'));
 
+// Ratatui ecosystem authoring. These tools deliberately build on the existing
+// generic prototype action, so older Studio tabs fail gracefully instead of
+// requiring a second bridge protocol.
+tool('list_ratatui_libraries', { title: 'List Ratatui ecosystem libraries', description: 'Lists the primary integrated Ratatui libraries plus optional adapters, versions and purposes.', inputSchema: {} }, () => RATATUI_LIBRARIES);
+tool('list_ratatui_adapters', { title: 'List Ratatui component adapters', description: 'Lists the production adapters that can be assigned to a portable Syndrid component.', inputSchema: {} }, () => RATATUI_ADAPTERS);
+tool('get_component_ecosystem', { title: 'Get component Ratatui adapter', description: 'Returns one component’s persisted ecosystem adapter metadata.', inputSchema: { componentId: z.string() } }, async ({ componentId }) => {
+  const root = await callBrowser('get_tree');
+  const node = findTreeNode(root, componentId);
+  if (!node) throw new Error(`No component with id: ${componentId}`);
+  return node.prototype?.ecosystem ?? null;
+});
+tool('set_component_ecosystem', { title: 'Set component Ratatui adapter', description: 'Persists a complete ecosystem adapter spec on a component.', inputSchema: { componentId: z.string(), ecosystem: z.record(z.string(), z.unknown()) } }, ({ componentId, ecosystem }) => callBrowser('update_prototype', { id: componentId, prototype: { ecosystem } }));
+tool('apply_ratatui_adapter', { title: 'Apply Ratatui adapter defaults', description: 'Assigns a known adapter and safe defaults for Textarea, image, tui-widgets, PTY, interaction, node graph, ANSI, or optional embedded output.', inputSchema: { componentId: z.string(), adapter: z.string() } }, async ({ componentId, adapter }) => {
+  if (!ADAPTER_IDS.has(adapter)) throw new Error(`Unknown Ratatui adapter: ${adapter}`);
+  await callBrowser('update_prototype', { id: componentId, prototype: { ecosystem: defaultEcosystem(adapter) } });
+  return { componentId, ecosystem: defaultEcosystem(adapter) };
+});
+tool('clear_component_ecosystem', { title: 'Clear component Ratatui adapter', description: 'Returns a component to the portable native Ratatui adapter.', inputSchema: { componentId: z.string() } }, ({ componentId }) => callBrowser('update_prototype', { id: componentId, prototype: { ecosystem: defaultEcosystem('native') } }));
+tool('export_ratatui_ecosystem', { title: 'Export Ratatui ecosystem plan', description: 'Returns the project’s component adapter bindings, dependency plan, Rust integration notes and warnings from the canonical implementation spec.', inputSchema: {} }, async () => {
+  const spec = await callBrowser('get_project_spec', {}, 10000);
+  return spec.ecosystem ?? { libraries: RATATUI_LIBRARIES, bindings: [], cargoSnippet: '', rustPlan: '', warnings: ['Connected Studio does not yet expose ecosystem projection.'] };
+});
+
 // ratatui-image asset authoring
 tool('list_image_assets', { title: 'List image assets', description: 'Lists ratatui-image-oriented assets and protocol/fallback policies stored in the project spec.', inputSchema: {} }, () => callBrowser('list_image_assets'));
 tool('upsert_image_asset', { title: 'Create or update image asset', description: 'Stores an image source with fit, alignment, terminal protocol and fallback policy.', inputSchema: { asset: z.object({ id: z.string(), name: z.string(), source: z.string(), alt: z.string().optional(), fit: z.enum(['contain','cover','stretch','original']), alignment: z.enum(['start','center','end']), protocol: z.enum(['auto','kitty','sixel','iterm2','halfblocks']), fallback: z.enum(['placeholder','alt-text','hidden']) }) } }, ({ asset }) => callBrowser('upsert_image_asset', { asset }));
 tool('remove_image_asset', { title: 'Remove image asset', description: 'Removes an image asset from the portable project spec.', inputSchema: { id: z.string() } }, ({ id }) => callBrowser('remove_image_asset', { id }));
 
 // Existing component/design-system surface
-tool('update_prototype', { title: 'Update prototype behavior', description: 'Merges focus/state/keybinding/legacy compatibility fields on a component.', inputSchema: { id: z.string(), prototype: z.record(z.string(), z.unknown()) } }, (args) => callBrowser('update_prototype', args));
+tool('update_prototype', { title: 'Update prototype behavior', description: 'Merges focus/state/keybinding/effect/ecosystem metadata on a component.', inputSchema: { id: z.string(), prototype: z.record(z.string(), z.unknown()) } }, (args) => callBrowser('update_prototype', args));
 tool('save_reusable_component', { title: 'Save reusable component', description: 'Captures a subtree into the project design-system library.', inputSchema: { componentId: z.string(), name: z.string().optional(), description: z.string().optional(), tags: z.array(z.string()).optional() } }, (args) => callBrowser('save_reusable_component', args));
 tool('insert_reusable_component', { title: 'Insert reusable component', description: 'Instantiates a saved reusable component with fresh IDs.', inputSchema: { reusableId: z.string(), parentId: z.string().optional() } }, (args) => callBrowser('insert_reusable_component', args));
 tool('list_reusable_components', { title: 'List reusable components', description: 'Lists project design-system components.', inputSchema: {} }, () => callBrowser('list_reusable_components'));
