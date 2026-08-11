@@ -1,11 +1,19 @@
-import type { ComponentNode, SyndridProjectData } from '../types';
+import type { ComponentNode, EffectDefinition, SyndridProjectData } from '../types';
 import { collectPrototypeSummary, collectResponsiveOverrides, resolveTreeForPreview } from './projectResolver';
 import { exportToText } from './export/textExporter';
-import { exportTachyonFxMotionPlan } from './tachyonFxExporter';
+import { exportTachyonFxCargoSnippet, exportTachyonFxMotionPlan } from './tachyonFxExporter';
+import { effectToTachyonFxDsl } from './tachyonFxDsl';
 import { layoutEngine } from './layout';
 
+function collectEffects(node: ComponentNode | null, out: Array<{ componentId: string; componentName: string; effect: EffectDefinition }> = []) {
+  if (!node) return out;
+  for (const effect of node.prototype?.effects ?? []) out.push({ componentId: node.id, componentName: node.name, effect });
+  node.children.forEach((child) => collectEffects(child, out));
+  return out;
+}
+
 export interface SyndridImplementationSpec {
-  schema: 'syndrid-tui-spec/v1';
+  schema: 'syndrid-tui-spec/v2';
   generatedAt: string;
   intent: {
     framework: 'ratatui';
@@ -31,74 +39,63 @@ export interface SyndridImplementationSpec {
   motion: {
     runtime: 'tachyonfx';
     targetVersion: '0.25.x';
+    effects: Array<{ componentId: string; componentName: string; effect: EffectDefinition; dsl: string; reducedMotionDsl: string }>;
     rustPlan: string;
+    cargoSnippet: string;
   };
+  images: SyndridProjectData['imageAssets'];
+  runtimeLibraries: SyndridProjectData['runtimeLibraries'];
   implementationRules: string[];
 }
 
-export function buildSyndridImplementationSpec(
-  root: ComponentNode | null,
-  project: SyndridProjectData
-): SyndridImplementationSpec {
+export function buildSyndridImplementationSpec(root: ComponentNode | null, project: SyndridProjectData): SyndridImplementationSpec {
   const previews = project.viewports.map((viewport) => {
     const resolved = resolveTreeForPreview(root, viewport.id, 'default');
-    const text = exportToText(resolved, {
-      format: 'text',
-      width: viewport.width,
-      height: viewport.height,
-    });
+    const text = exportToText(resolved, { format: 'text', width: viewport.width, height: viewport.height });
     const warnings = layoutEngine
       .getNodesWithWarnings()
       .map((nodeId) => layoutEngine.getDebugInfo(nodeId))
       .filter((info): info is NonNullable<typeof info> => !!info);
-    return {
-      id: viewport.id,
-      label: viewport.label,
-      width: viewport.width,
-      height: viewport.height,
-      warningCount: warnings.length,
-      warnings,
-      text,
-    };
+    return { id: viewport.id, label: viewport.label, width: viewport.width, height: viewport.height, warningCount: warnings.length, warnings, text };
   });
+  const effects = collectEffects(root).map((record) => ({
+    ...record,
+    dsl: effectToTachyonFxDsl(record.effect),
+    reducedMotionDsl: effectToTachyonFxDsl(record.effect, true),
+  }));
 
   return {
-    schema: 'syndrid-tui-spec/v1',
+    schema: 'syndrid-tui-spec/v2',
     generatedAt: new Date().toISOString(),
-    intent: {
-      framework: 'ratatui',
-      animationRuntime: 'tachyonfx',
-      generatedCodeIsOptional: true,
-      preserveExistingArchitecture: true,
-    },
+    intent: { framework: 'ratatui', animationRuntime: 'tachyonfx', generatedCodeIsOptional: true, preserveExistingArchitecture: true },
     project,
     sourceTree: root,
-    responsive: {
-      overrides: collectResponsiveOverrides(root),
-      previews,
-    },
+    responsive: { overrides: collectResponsiveOverrides(root), previews },
     interaction: collectPrototypeSummary(root),
     motion: {
       runtime: 'tachyonfx',
       targetVersion: '0.25.x',
+      effects,
       rustPlan: exportTachyonFxMotionPlan(root),
+      cargoSnippet: exportTachyonFxCargoSnippet(),
     },
+    images: project.imageAssets,
+    runtimeLibraries: project.runtimeLibraries,
     implementationRules: [
       'Treat this file as design intent, not permission to replace Syndrid architecture.',
+      'The structured EffectDefinition graph is canonical; DSL and Rust are projections of that graph.',
       'Prefer existing Syndrid widgets, state machines, routing, and orchestration primitives.',
       'Implement layout with Ratatui constraints and verify Wide, Medium, Narrow, and Short viewports.',
-      'Use TachyonFX-compatible effects for authored motion where practical; preserve behavior when reduced motion is enabled.',
+      'Advance TachyonFX from elapsed time; never block input or sleep the event loop.',
+      'Honor authored reduced-motion replacements instead of globally deleting semantic state feedback.',
+      'Use ratatui-image capability detection and authored fallbacks for image assets.',
+      'mousefood is an optional embedded-display target and must not be treated as desktop pointer input.',
       'Keyboard focus must be explicit and deterministic. Never dispatch widget-scoped actions globally.',
-      'Animations must not block input, streaming output, cancellation, or terminal resize handling.',
-      'Do not use animation to hide latency; status should remain semantically truthful.',
       'Check double-width Unicode glyphs and terminal-cell alignment before shipping.',
     ],
   };
 }
 
-export function exportSyndridImplementationSpec(
-  root: ComponentNode | null,
-  project: SyndridProjectData
-): string {
+export function exportSyndridImplementationSpec(root: ComponentNode | null, project: SyndridProjectData): string {
   return JSON.stringify(buildSyndridImplementationSpec(root, project), null, 2);
 }
