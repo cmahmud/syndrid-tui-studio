@@ -234,7 +234,7 @@ export function normalizeProjectData(data?: Partial<SyndridProjectData> | Record
   const activeViewportId = viewports.some((viewport) => viewport.id === requestedActive)
     ? requestedActive
     : viewports.find((viewport) => viewport.id === 'narrow')?.id ?? viewports[0].id;
-  const playback = isRecord(raw.effectPlayback) ? raw.effectPlayback : {};
+  const playback: Record<string, unknown> = isRecord(raw.effectPlayback) ? raw.effectPlayback : {};
   return {
     version: '3',
     settings: {
