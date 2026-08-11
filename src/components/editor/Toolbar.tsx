@@ -1,12 +1,15 @@
 // Top toolbar with controls
 
 import { useEffect, lazy, Suspense } from 'react';
-import { Undo2, Redo2, ZoomIn, ZoomOut, Grid3x3, Contrast, Save, Palette, Search, Bot } from 'lucide-react';
+import { Undo2, Redo2, ZoomIn, ZoomOut, Grid3x3, Contrast, Save, Palette, Search, Bot, TerminalSquare } from 'lucide-react';
 import { useComponentStore, useCanvasStore, useThemeStore, useUIStore } from '../../stores';
-// Lazy: the export panel pulls in all seven code exporters, which most
-// sessions never open. Keep them out of the main bundle until they're needed.
+// Lazy: exporters and the native test console are substantial surfaces that
+// should not inflate the editor's first-load bundle.
 const ExportModal = lazy(() =>
   import('../export/ExportModal').then((m) => ({ default: m.ExportModal }))
+);
+const TerminalTestModal = lazy(() =>
+  import('./TerminalTestModal').then((m) => ({ default: m.TerminalTestModal }))
 );
 import { THEME_NAMES } from '../../stores/themeStore';
 import { ComponentToolbar } from './ComponentToolbar';
@@ -31,7 +34,6 @@ export function Toolbar() {
   const agentBridgeEnabled = useUIStore((s) => s.agentBridgeEnabled);
   const agentBridgeStatus = useUIStore((s) => s.agentBridgeStatus);
 
-  // Apply saved accent color on mount
   useEffect(() => {
     const preset = (localStorage.getItem('settings-accent-preset') as AccentPreset) || 'tuigreen';
     const custom = localStorage.getItem('settings-accent-custom') || '#4ade80';
@@ -44,7 +46,6 @@ export function Toolbar() {
   return (
     <>
       <div className="h-14 px-4 flex items-center justify-between bg-background border-b border-border">
-        {/* Left - Logo/Title */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-0.5">
             <img
@@ -60,18 +61,14 @@ export function Toolbar() {
           </div>
         </div>
 
-        {/* Center - Tools */}
         <div className="flex items-center gap-2">
-          {/* Component Toolbar (when docked) */}
           {isToolbarDocked && (
             <>
               <ComponentToolbar />
-              {/* Separator */}
               <div className="h-6 w-px bg-border" />
             </>
           )}
 
-          {/* Undo/Redo */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => componentStore.undo()}
@@ -91,7 +88,6 @@ export function Toolbar() {
             </button>
           </div>
 
-          {/* Zoom */}
           <div className="flex items-center gap-1 bg-card rounded-lg px-1 py-0.5">
             <button
               onClick={() => canvasStore.setZoom(canvasStore.zoom - 0.25)}
@@ -121,29 +117,22 @@ export function Toolbar() {
             Reset
           </button>
 
-          {/* Grid */}
           <button
             onClick={() => canvasStore.toggleGrid()}
-            className={`p-2 hover:bg-accent rounded-lg transition-colors ${
-              canvasStore.showGrid ? 'bg-accent' : ''
-            }`}
+            className={`p-2 hover:bg-accent rounded-lg transition-colors ${canvasStore.showGrid ? 'bg-accent' : ''}`}
             title="Toggle Grid"
           >
             <Grid3x3 className="w-4 h-4" />
           </button>
 
-          {/* Monochrome preview */}
           <button
             onClick={() => canvasStore.toggleMonochrome()}
-            className={`p-2 hover:bg-accent rounded-lg transition-colors ${
-              canvasStore.monochrome ? 'bg-accent' : ''
-            }`}
+            className={`p-2 hover:bg-accent rounded-lg transition-colors ${canvasStore.monochrome ? 'bg-accent' : ''}`}
             title="Monochrome Preview"
           >
             <Contrast className="w-4 h-4" />
           </button>
 
-          {/* Theme Selector */}
           <div className="flex items-center gap-2 bg-card rounded-lg px-2.5 py-1.5">
             <Palette className="w-3.5 h-3.5 text-muted-foreground" />
             <select
@@ -160,7 +149,6 @@ export function Toolbar() {
             </select>
           </div>
 
-          {/* Command Palette */}
           <button
             onClick={() => setCommandPaletteOpen(true)}
             className="p-2 hover:bg-accent rounded-lg transition-colors"
@@ -170,8 +158,15 @@ export function Toolbar() {
           </button>
         </div>
 
-        {/* Right - Actions */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => openDialog('terminal-test')}
+            className="px-2.5 py-1.5 text-xs rounded-lg flex items-center gap-1.5 border border-border transition-colors hover:bg-accent"
+            title="Run the current design in a real Ratatui/TachyonFX terminal"
+          >
+            <TerminalSquare className="w-3.5 h-3.5" />
+            <span>Run Terminal</span>
+          </button>
           <button
             onClick={() => openDialog('settings')}
             className={`px-2.5 py-1.5 text-xs rounded-lg flex items-center gap-1.5 border transition-colors hover:bg-accent ${
@@ -213,29 +208,23 @@ export function Toolbar() {
         </div>
       </div>
 
-      {/* Export Modal — only rendered (and its chunk fetched) once actually opened */}
       {activeDialog === 'export' && (
         <Suspense fallback={null}>
           <ExportModal isOpen onClose={closeDialog} />
         </Suspense>
       )}
 
-      {/* Save Dialog */}
+      {activeDialog === 'terminal-test' && (
+        <Suspense fallback={null}>
+          <TerminalTestModal onClose={closeDialog} />
+        </Suspense>
+      )}
+
       {activeDialog === 'save' && <SaveDialog onClose={closeDialog} />}
-
-      {/* About Modal */}
       {activeDialog === 'about' && <AboutModal onClose={closeDialog} />}
-
-      {/* Help Modal */}
       {activeDialog === 'help' && <HelpModal onClose={closeDialog} />}
-
-      {/* Changelog Modal */}
       {activeDialog === 'changelog' && <ChangelogModal onClose={closeDialog} />}
-
-      {/* Settings Modal */}
       {activeDialog === 'settings' && <SettingsModal onClose={closeDialog} />}
-
-      {/* Template Gallery Modal */}
       {activeDialog === 'templates' && <TemplateGalleryModal onClose={closeDialog} />}
     </>
   );
