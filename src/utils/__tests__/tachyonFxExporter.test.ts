@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AnimationSpec, ComponentNode } from '../../types';
 import { makePrimitiveEffect } from '../../types';
-import { animationToTachyonFxDsl, exportTachyonFxMotionPlan } from '../tachyonFxExporter';
+import {
+  animationToTachyonFxDsl,
+  exportTachyonFxCargoSnippet,
+  exportTachyonFxMotionPlan,
+} from '../tachyonFxExporter';
 
 function motion(overrides: Partial<AnimationSpec> = {}): AnimationSpec {
   return {
@@ -68,7 +72,7 @@ describe('TachyonFX motion export', () => {
     expect(out).not.toContain('No enabled TachyonFX effects have been authored yet.');
     expect(out).toContain('effect_loading_comet');
     expect(out).toContain('source=legacy');
-    expect(out).toContain('Discovery: v3=1 legacy=1 enabled=1');
+    expect(out).toContain('Discovery: v3=1 legacy=1 resolved=2 enabled=1 rescuedLegacy=0');
   });
 
   it('lets an enabled legacy mirror rescue a stale disabled v3 effect with the same id', () => {
@@ -85,7 +89,7 @@ describe('TachyonFX motion export', () => {
     expect(out).not.toContain('No enabled TachyonFX effects have been authored yet.');
     expect(out.match(/fn effect_loading_comet/g)).toHaveLength(1);
     expect(out).toContain('source=legacy');
-    expect(out).toContain('Discovery: v3=1 legacy=1 enabled=1');
+    expect(out).toContain('Discovery: v3=1 legacy=1 resolved=1 enabled=1 rescuedLegacy=1');
   });
 
   it('prefers the enabled canonical v3 graph when its legacy compatibility mirror has the same id', () => {
@@ -101,5 +105,24 @@ describe('TachyonFX motion export', () => {
     const out = exportTachyonFxMotionPlan(root);
     expect(out.match(/fn effect_shared_motion/g)).toHaveLength(1);
     expect(out).toContain('source=v3');
+  });
+
+  it('generates dependency guidance from the project runtime-version source of truth', () => {
+    const cargo = exportTachyonFxCargoSnippet({
+      ratatui: '0.30.8',
+      tachyonfx: '0.25.8',
+      ratatuiTextarea: '0.9.8',
+      tuiWidgets: '0.7.8',
+      ratatuiImage: '11.0.8',
+      mousefood: '0.5.8',
+      ansiToTui: '8.0.8',
+      optional: ['tui-term'],
+    });
+    expect(cargo).toContain('ratatui = "0.30.8"');
+    expect(cargo).toContain('tachyonfx = "0.25.8"');
+    expect(cargo).toContain('ratatui-textarea = "0.9.8"');
+    expect(cargo).toContain('tui-widgets = "0.7.8"');
+    expect(cargo).toContain('ratatui-image = "11.0.8"');
+    expect(cargo).toContain('ansi-to-tui = "8.0.8"');
   });
 });
