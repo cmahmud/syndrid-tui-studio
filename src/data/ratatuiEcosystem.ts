@@ -12,19 +12,19 @@ export const RATATUI_ECOSYSTEM_LIBRARIES: RatatuiEcosystemLibrary[] = [
   { id: 'ratatui-image', crateName: 'ratatui-image', version: '11.0.6', purpose: 'Kitty, Sixel, iTerm2 and half-block images', status: 'integrated', desktop: true, embedded: false },
   { id: 'mousefood', crateName: 'mousefood', version: '0.5.2', purpose: 'Embedded-graphics backend for physical displays', status: 'integrated', desktop: false, embedded: true },
   { id: 'ansi-to-tui', crateName: 'ansi-to-tui', version: '8.0.1', purpose: 'Convert ANSI terminal output into Ratatui text', status: 'integrated', desktop: true, embedded: false },
-  { id: 'tui-tree-widget', crateName: 'tui-tree-widget', version: 'managed', purpose: 'Stateful hierarchical tree rendering', status: 'optional', desktop: true, embedded: false },
-  { id: 'tui-widget-list', crateName: 'tui-widget-list', version: 'managed', purpose: 'Rich arbitrary-widget list rendering', status: 'optional', desktop: true, embedded: false },
-  { id: 'tui-term', crateName: 'tui-term', version: 'managed', purpose: 'PTY/terminal content rendered as a Ratatui widget', status: 'optional', desktop: true, embedded: false },
-  { id: 'ratatui-interact', crateName: 'ratatui-interact', version: 'managed', purpose: 'Focus, mouse and interaction primitives', status: 'optional', desktop: true, embedded: false },
-  { id: 'tui-syntax-highlight', crateName: 'tui-syntax-highlight', version: 'managed', purpose: 'Syntax-highlighted code blocks', status: 'optional', desktop: true, embedded: false },
-  { id: 'tui-nodes', crateName: 'tui-nodes', version: 'managed', purpose: 'Node graph visualization', status: 'optional', desktop: true, embedded: false },
-  { id: 'termprofile', crateName: 'termprofile', version: 'managed', purpose: 'Terminal capability profiling', status: 'optional', desktop: true, embedded: false },
+  { id: 'tui-tree-widget', crateName: 'tui-tree-widget', version: '0.24.1', purpose: 'Stateful hierarchical tree rendering', status: 'integrated', desktop: true, embedded: false },
+  { id: 'tui-widget-list', crateName: 'tui-widget-list', version: '0.15.3', purpose: 'Rich arbitrary-widget list rendering', status: 'integrated', desktop: true, embedded: false },
+  { id: 'tui-term', crateName: 'tui-term', version: '0.3.4', purpose: 'PTY/terminal content rendered as a Ratatui widget', status: 'integrated', desktop: true, embedded: false },
+  { id: 'ratatui-interact', crateName: 'ratatui-interact', version: '0.5.3', purpose: 'Focus, mouse and interaction primitives', status: 'integrated', desktop: true, embedded: false },
+  { id: 'tui-syntax-highlight', crateName: 'tui-syntax-highlight', version: '0.2.0', purpose: 'Syntax-highlighted code blocks', status: 'integrated', desktop: true, embedded: false },
+  { id: 'tui-nodes', crateName: 'tui-nodes', version: '0.10.0', purpose: 'Node graph visualization', status: 'integrated', desktop: true, embedded: false },
+  { id: 'termprofile', crateName: 'termprofile', version: '0.2.4', purpose: 'Terminal capability profiling', status: 'integrated', desktop: true, embedded: false },
 ];
 
 export const RATATUI_ADAPTERS: RatatuiAdapterDefinition[] = [
   { id: 'native', label: 'Native Ratatui', description: 'Use Syndrid core Ratatui export for this component.', library: 'ratatui', recommendedTypes: [] },
   { id: 'textarea', label: 'Ratatui Textarea', description: 'Stateful multiline editing, cursor movement, selection and search.', library: 'ratatui-textarea', recommendedTypes: ['TextArea', 'TextInput'] },
-  { id: 'image', label: 'Ratatui Image', description: 'Render a bound image asset with terminal-protocol negotiation.', library: 'ratatui-image', recommendedTypes: ['Box', 'Text'] },
+  { id: 'image', label: 'Ratatui Image', description: 'Render a bound image asset with terminal-protocol negotiation.', library: 'ratatui-image', recommendedTypes: ['Image'] },
   { id: 'big-text', label: 'Big Text', description: 'Render large terminal typography from tui-widgets.', library: 'tui-widgets', recommendedTypes: ['Text'] },
   { id: 'card', label: 'Card', description: 'Use tui-widgets cards for structured card surfaces.', library: 'tui-widgets', recommendedTypes: ['Box'] },
   { id: 'popup', label: 'Popup', description: 'Use tui-widgets popup positioning and overlay behavior.', library: 'tui-widgets', recommendedTypes: ['Modal', 'Box'] },
@@ -32,11 +32,11 @@ export const RATATUI_ADAPTERS: RatatuiAdapterDefinition[] = [
   { id: 'scrollview', label: 'Scroll View', description: 'Scrollable viewport backed by tui-scrollview via tui-widgets.', library: 'tui-widgets', recommendedTypes: ['Box', 'Log', 'Table', 'List'] },
   { id: 'tree-widget', label: 'Tree Widget', description: 'Stateful hierarchy rendering via tui-tree-widget.', library: 'tui-tree-widget', recommendedTypes: ['Tree'] },
   { id: 'widget-list', label: 'Widget List', description: 'Rows can be arbitrary widgets with selection and scrolling.', library: 'tui-widget-list', recommendedTypes: ['List', 'Menu'] },
-  { id: 'terminal', label: 'Terminal / PTY', description: 'Render real terminal output through tui-term.', library: 'tui-term', recommendedTypes: ['Box', 'Log'] },
+  { id: 'terminal', label: 'Terminal / PTY', description: 'Render real terminal output through tui-term.', library: 'tui-term', recommendedTypes: ['Terminal', 'Log'] },
   { id: 'interactive', label: 'Interactive', description: 'Use ratatui-interact focus and pointer hit-testing primitives.', library: 'ratatui-interact', recommendedTypes: ['Button', 'List', 'Table', 'Tree'] },
-  { id: 'syntax-highlight', label: 'Syntax Highlight', description: 'Use tui-syntax-highlight for code-oriented content.', library: 'tui-syntax-highlight', recommendedTypes: ['Text', 'TextArea', 'Log'] },
-  { id: 'node-graph', label: 'Node Graph', description: 'Visual graph surface backed by tui-nodes.', library: 'tui-nodes', recommendedTypes: ['Box'] },
-  { id: 'ansi-text', label: 'ANSI Text', description: 'Import/convert ANSI terminal output through ansi-to-tui.', library: 'ansi-to-tui', recommendedTypes: ['Text', 'Log'] },
+  { id: 'syntax-highlight', label: 'Syntax Highlight', description: 'Use tui-syntax-highlight for code-oriented content.', library: 'tui-syntax-highlight', recommendedTypes: ['Code', 'TextArea', 'Log'] },
+  { id: 'node-graph', label: 'Node Graph', description: 'Visual graph surface backed by tui-nodes.', library: 'tui-nodes', recommendedTypes: ['NodeGraph'] },
+  { id: 'ansi-text', label: 'ANSI Text', description: 'Import/convert ANSI terminal output through ansi-to-tui.', library: 'ansi-to-tui', recommendedTypes: ['AnsiText', 'Log'] },
 ];
 
 export function defaultEcosystemSpec(adapter: ComponentEcosystemSpec['adapter'] = 'native'): ComponentEcosystemSpec {
