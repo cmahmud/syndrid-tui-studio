@@ -20,13 +20,11 @@ export function nativePtyAvailable(): boolean {
   return typeof window !== 'undefined' && typeof window.__TAURI__?.core?.invoke === 'function';
 }
 
-export function startNativePty(
-  sessionId: string,
-  command: string,
-  cwd?: string,
-  cols = 100,
-  rows = 30
-): Promise<void> {
+export function loadNativeImageDataUri(path: string): Promise<string> {
+  return nativeInvoke<string>('image_preview_data_uri', { path });
+}
+
+export function startNativePty(sessionId: string, command: string, cwd?: string, cols = 100, rows = 30): Promise<void> {
   return nativeInvoke<void>('pty_start', {
     sessionId,
     command,
