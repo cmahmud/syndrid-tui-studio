@@ -6,6 +6,7 @@ import type {
   PrototypeStateName,
   ResponsiveOverride,
 } from '../../types';
+import { EcosystemEditor } from './EcosystemEditor';
 import { EffectEditor } from './EffectEditor';
 
 const STATES: PrototypeStateName[] = ['focused', 'selected', 'disabled', 'loading', 'success', 'warning', 'error'];
@@ -123,6 +124,7 @@ export function PrototypeEditor({ component }: { component: ComponentNode }) {
       </section>
 
       <EffectEditor componentId={component.id} />
+      <EcosystemEditor component={component} />
 
       <section className="border-t border-border/40 pt-3 space-y-2">
         <div className="text-[11px] font-semibold">Key bindings</div>
