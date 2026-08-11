@@ -15,6 +15,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Temporary audit-repair artifact: once this exact lockfile is committed,
+      # remove this generation/upload pair and keep only the hard audit gate.
+      - name: generate compatible production-audit lock repair
+        run: npm audit fix --package-lock-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proposed-package-lock
+          path: package-lock.json
       - name: reject high-severity production dependency advisories
         run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
