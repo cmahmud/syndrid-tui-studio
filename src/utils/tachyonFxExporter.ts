@@ -6,16 +6,62 @@ interface MotionRecord {
   componentId: string;
   componentName: string;
   effect: EffectDefinition;
+  source: 'v3' | 'legacy';
 }
 
-function collect(node: ComponentNode | null, out: MotionRecord[] = []): MotionRecord[] {
-  if (!node) return out;
-  const effects = node.prototype?.effects?.length
-    ? node.prototype.effects
-    : (node.prototype?.animations ?? []).map((animation) => legacyAnimationToEffect(node.id, animation));
-  for (const effect of effects) if (effect.enabled) out.push({ componentId: node.id, componentName: node.name, effect });
-  node.children.forEach((child) => collect(child, out));
-  return out;
+interface MotionCollectionStats {
+  canonical: number;
+  legacy: number;
+  enabled: number;
+}
+
+function effectKey(effect: EffectDefinition): string {
+  return effect.id || `${effect.name}:${effect.trigger.kind}`;
+}
+
+/**
+ * Read authored motion from every representation Syndrid currently persists.
+ *
+ * v3 EffectDefinition graphs are canonical, while `animations` is retained as a
+ * compatibility mirror for Canvas/older .tui projects.  The old exporter chose
+ * one representation or the other based only on `effects.length`, which meant
+ * a stale/disabled v3 entry could hide a valid enabled legacy mirror.  Export
+ * must instead merge both representations and de-duplicate matching ids.
+ */
+function authoredEffects(node: ComponentNode): Array<{ effect: EffectDefinition; source: MotionRecord['source'] }> {
+  const canonical = node.prototype?.effects ?? [];
+  const merged: Array<{ effect: EffectDefinition; source: MotionRecord['source'] }> = canonical.map((effect) => ({ effect, source: 'v3' }));
+  const seen = new Set(canonical.map(effectKey));
+
+  for (const animation of node.prototype?.animations ?? []) {
+    const effect = legacyAnimationToEffect(node.id, animation);
+    const key = effectKey(effect);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ effect, source: 'legacy' });
+  }
+
+  return merged;
+}
+
+function collect(
+  node: ComponentNode | null,
+  out: MotionRecord[] = [],
+  stats: MotionCollectionStats = { canonical: 0, legacy: 0, enabled: 0 }
+): { records: MotionRecord[]; stats: MotionCollectionStats } {
+  if (!node) return { records: out, stats };
+
+  stats.canonical += node.prototype?.effects?.length ?? 0;
+  stats.legacy += node.prototype?.animations?.length ?? 0;
+
+  for (const { effect, source } of authoredEffects(node)) {
+    if (!effect.enabled) continue;
+    stats.enabled += 1;
+    out.push({ componentId: node.id, componentName: node.name, effect, source });
+  }
+
+  node.children.forEach((child) => collect(child, out, stats));
+  return { records: out, stats };
 }
 
 function rustIdent(value: string): string {
@@ -87,10 +133,12 @@ export function animationToTachyonFxDsl(animation: AnimationSpec, reducedMotion 
 }
 
 export function exportTachyonFxMotionPlan(root: ComponentNode | null): string {
-  const records = collect(root);
+  const { records, stats } = collect(root);
   const lines = [
     '// Syndrid TUI Studio v3 — production-oriented TachyonFX effect plan',
     '// Canonical source is the structured EffectDefinition graph stored in the .tui file.',
+    '// Legacy animations are merged only as a compatibility source and de-duplicated by effect id.',
+    `// Discovery: v3=${stats.canonical} legacy=${stats.legacy} enabled=${stats.enabled}`,
     '// Target TachyonFX family: 0.25.x. Pin the exact compatible version in the consuming Ratatui app.',
     'use ratatui::{layout::Rect, style::Color};',
     'use tachyonfx::{fx, CellFilter, Effect, EffectManager, EffectTimer, Interpolation, Motion};',
@@ -106,9 +154,9 @@ export function exportTachyonFxMotionPlan(root: ComponentNode | null): string {
     return lines.join('\n');
   }
 
-  for (const { componentId, componentName, effect } of records) {
+  for (const { componentId, componentName, effect, source } of records) {
     const fnName = `effect_${rustIdent(effect.id)}`;
-    lines.push(`// ${componentName} (${componentId}) · ${targetComment(effect.target)} · trigger=${effect.trigger.kind}`);
+    lines.push(`// ${componentName} (${componentId}) · ${targetComment(effect.target)} · trigger=${effect.trigger.kind} · source=${source}`);
     if (effect.notes) lines.push(`// ${effect.notes.replace(/\r?\n/g, ' ')}`);
     lines.push(`fn ${fnName}(reduced_motion: bool) -> Effect {`);
     lines.push(`    let mut effect = if reduced_motion {`);
