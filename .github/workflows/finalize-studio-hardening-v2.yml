@@ -118,7 +118,7 @@ jobs:
         run: |
           rm -rf scripts/bootstrap
 
-      - name: commit converged branch
+      - name: publish validated generated state
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -126,7 +126,8 @@ jobs:
           git add -A
           if git diff --cached --quiet; then
             echo "No convergence changes to commit."
+            git push origin "HEAD:refs/heads/agent/studio-hardening-generated-final-v4"
             exit 0
           fi
           git commit -m "chore: finalize terminal runtime hardening"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          git push origin "HEAD:refs/heads/agent/studio-hardening-generated-final-v4"
