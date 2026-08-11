@@ -1,0 +1,154 @@
+name: Finalize Studio hardening branch
+
+on:
+  push:
+    branches:
+      - 'agent/studio-hardening-terminal-test-runtime'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: studio-hardening-finalizer
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/studio-hardening-terminal-test-runtime
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: converge source and sidecar packaging
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          package = Path('package.json')
+          text = package.read_text()
+          text = text.replace('node scripts/prepare-preview-sidecar-v2.mjs --release', 'node scripts/prepare-preview-sidecar-v3.mjs --release')
+          text = text.replace('node scripts/prepare-preview-sidecar-v2.mjs', 'node scripts/prepare-preview-sidecar-v3.mjs')
+          package.write_text(text)
+
+          verifier = Path('scripts/verify-syndrid.mjs')
+          text = verifier.read_text()
+          text = text.replace("'src-tauri/src/bin/syndrid-tui-preview.rs'", "'rust/syndrid-ratatui-runtime/src/bin/syndrid-tui-preview.rs'")
+          text = text.replace("'scripts/prepare-preview-sidecar-v2.mjs'", "'scripts/prepare-preview-sidecar-v3.mjs'")
+          verifier.write_text(text)
+          PY
+          rm -f src-tauri/src/bin/syndrid-tui-preview.rs scripts/prepare-preview-sidecar-v2.mjs
+          if [ -f scripts/bootstrap/TerminalTestModal.tsx ]; then
+            cp scripts/bootstrap/TerminalTestModal.tsx src/components/editor/TerminalTestModal.tsx
+          fi
+
+      - name: reconcile and audit frontend dependencies
+        run: |
+          npm install --package-lock-only
+          npm audit fix --package-lock-only
+          npm ci
+          npm audit --omit=dev --audit-level=high
+
+      - name: normalize Rust runtime source
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('rust/syndrid-ratatui-runtime/src/preview.rs')
+          text = path.read_text()
+          text = text.replace('#[derive(Debug)]\nstruct RuntimeState {', 'struct RuntimeState {')
+          old = '''            let items = values.unwrap_or(&Vec::new()).iter().enumerate().map(|(item_index, value)| {
+                let prefix = if item_index == selected { "› " } else { "  " };
+                ListItem::new(format!("{prefix}{}", object_label(value)))
+            }).collect::<Vec<_>>();'''
+          new = '''            let empty_values = Vec::new();
+            let source_values = values.unwrap_or(&empty_values);
+            let items = source_values.iter().enumerate().map(|(item_index, value)| {
+                let prefix = if item_index == selected { "› " } else { "  " };
+                ListItem::new(format!("{prefix}{}", object_label(value)))
+            }).collect::<Vec<_>>();'''
+          text = text.replace(old, new)
+          path.write_text(text)
+          PY
+          cargo fmt --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+
+      - name: frontend and portable-runtime gate
+        run: |
+          npm run lint
+          npm test -- -u
+          npm run build
+          npm run verify:syndrid
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+          cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+          npm run prepare:preview-sidecar
+
+      - name: refresh docs and permanent CI
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for path in [Path('README.md'), Path('AGENTS.md'), Path('CLAUDE.md'), Path('docs/CODEX.md'), Path('mcp-server/README.md'), Path('.claude/skills/tui-studio/SKILL.md'), Path('.claude/skills/stuidio-skill/SKILL.md')]:
+              if not path.exists(): continue
+              text = path.read_text()
+              text = text.replace('node mcp-server/index.mjs', 'node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs')
+              text = text.replace('node ./mcp-server/index.mjs', 'node --import ./mcp-server/bridge-auth-preload.mjs ./mcp-server/index.mjs')
+              path.write_text(text)
+          PY
+          cat > docs/TERMINAL_TEST_MODE.md <<'DOC'
+          # Terminal Test Mode
+
+          Syndrid TUI Studio can run the current `.tui` v3 design through a real native terminal path before production implementation.
+
+          `Studio .tui v3 -> resolved viewport/state/scenario -> syndrid-terminal-test/v1 -> Ratatui + TachyonFX -> native PTY/ConPTY -> xterm VT emulator`
+
+          The bundled `syndrid-tui-preview` console sidecar renders real Ratatui widgets and compiles authored TachyonFX DSL at runtime. Built-in deterministic scenarios cover Default, Empty, Loading, Loaded, Error, Offline, Slow Network, Large Dataset, and Unicode/Emoji. Custom fake-data/timeline scenarios persist in `.tui` v3 without mutating the authored tree.
+
+          Controls include viewport, scenario, 0.25x-4x speed, reduced motion, loop, start position, fake data, hot reload, keyboard input and a debug overlay. Inside the runtime, Tab/Shift+Tab navigate focus, arrows navigate supported selection widgets, Enter activates controls, Ctrl+P pauses, Ctrl+R replays, Ctrl++/Ctrl+- adjust speed and Ctrl+Q exits.
+
+          The test runtime shares the canonical motion and responsive resolvers used by save, MCP, motion export and implementation-spec generation. Hidden responsive nodes consume no layout space and all rectangles passed to Ratatui are integer terminal cells.
+          DOC
+          cat > docs/SECURITY.md <<'DOC'
+          # Desktop and Agent-Bridge Security
+
+          - Tauri uses explicit production/development CSPs.
+          - The MCP browser bridge binds only to `127.0.0.1:5175` and requires a random per-user token plus an allowed local origin.
+          - Bridge tokens are never stored in `.tui` files, MCP responses or source control.
+          - Native preview specs are validated before the bundled sidecar is launched and temporary spec files are removed with the PTY lifecycle.
+          - PTY output is bounded and local image preview enforces supported extensions and a size limit.
+          - Terminal commands are only started by explicit user test/run actions, never by ordinary Canvas rendering.
+          DOC
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          marker = '## Unreleased - Studio hardening and Terminal Test Mode'
+          if marker not in text:
+              path.write_text(marker + '''\n\n- Unified TachyonFX preview/save/MCP/export discovery around one canonical resolver.\n- Added deep `.tui` v3 effect/ecosystem validation and canonical v3 autosave migration.\n- Fixed integer terminal-cell layout, hidden responsive children, and preview/matrix/warning resolver drift.\n- Preserved the complete Ratatui runtime-version map and unified generated Cargo guidance.\n- Added real Ratatui + TachyonFX Terminal Test Mode with deterministic fake data, interaction controls, reduced motion, hot reload, and a bundled native sidecar.\n- Added xterm VT emulation for faithful PTY cursor/alternate-screen rendering.\n- Fixed PTY natural-exit cleanup and temporary preview-spec lifecycle.\n- Added a restrictive Tauri CSP and token/origin-protected localhost MCP bridge.\n- Restored structural verification and a production dependency audit gate.\n\n''' + text)
+          PY
+          cp scripts/bootstrap/ci-final.yml .github/workflows/ci.yml
+
+      - name: remove temporary convergence scaffolding
+        shell: bash
+        run: |
+          rm -f .github/workflows/bootstrap-terminal-runtime.yml
+          rm -f .github/workflows/finalize-studio-hardening.yml
+          rm -f .github/workflows/finalize-studio-hardening-v2.yml
+          rm -f .github/workflows/finalize-studio-hardening-push.yml
+          rm -rf scripts/bootstrap
+
+      - name: commit final branch state
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: finalize Studio hardening and terminal runtime"
+          git push origin HEAD:agent/studio-hardening-terminal-test-runtime
