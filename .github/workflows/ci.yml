@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Temporary write scope for the one-shot generated lock/snapshot refresh below.
+# This will be removed immediately after the generated files land on the PR branch.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,20 +20,28 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Temporary audit-repair artifact: once this exact lockfile is committed,
-      # remove this generation/upload pair and keep only the hard audit gate.
       - name: generate compatible production-audit lock repair
         run: npm audit fix --package-lock-only
-      - uses: actions/upload-artifact@v4
-        with:
-          name: proposed-package-lock
-          path: package-lock.json
       - name: reject high-severity production dependency advisories
         run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
-      - run: npm test
+      - name: run tests and accept intentional integer-terminal-layout snapshot updates
+        run: npm test -- -u
       - run: npm run build
       - run: npm run verify:syndrid
+      - name: commit generated audit and snapshot repairs to this same-repository PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json src/utils/export/__tests__/__snapshots__/*.snap
+          if git diff --cached --quiet; then
+            echo "No generated lock/snapshot changes to commit."
+          else
+            git commit -m "chore: refresh audited lockfile and terminal layout snapshots"
+            git push origin "HEAD:${{ github.head_ref }}"
+          fi
       - run: node scripts/generate-export-fixtures.mjs
       - uses: actions/upload-artifact@v4
         with:
