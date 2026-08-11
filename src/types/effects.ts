@@ -159,21 +159,25 @@ export interface ImageAssetDefinition {
 }
 
 export interface RatatuiRuntimeLibraries {
+  ratatui?: string;
   tachyonfx: string;
   ratatuiTextarea: string;
   tuiWidgets: string;
   ratatuiImage: string;
   mousefood?: string;
+  ansiToTui?: string;
   optional: string[];
 }
 
 export const DEFAULT_RATATUI_RUNTIME_LIBRARIES: RatatuiRuntimeLibraries = {
-  tachyonfx: '0.25',
-  ratatuiTextarea: '0.7',
-  tuiWidgets: '0.3',
-  ratatuiImage: '8',
+  ratatui: '0.30.2',
+  tachyonfx: '0.25.1',
+  ratatuiTextarea: '0.9.2',
+  tuiWidgets: '0.7.10',
+  ratatuiImage: '11.0.6',
+  mousefood: '0.5.2',
+  ansiToTui: '8.0.1',
   optional: [
-    'tui-scrollview',
     'tui-tree-widget',
     'tui-widget-list',
     'tui-term',
@@ -181,7 +185,6 @@ export const DEFAULT_RATATUI_RUNTIME_LIBRARIES: RatatuiRuntimeLibraries = {
     'tui-syntax-highlight',
     'tui-nodes',
     'termprofile',
-    'ansi-to-tui',
   ],
 };
 

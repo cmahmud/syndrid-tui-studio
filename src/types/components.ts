@@ -19,6 +19,11 @@ export type ComponentType =
   | 'Toggle'
   // Display
   | 'Text'
+  | 'Image'
+  | 'Code'
+  | 'AnsiText'
+  | 'Terminal'
+  | 'NodeGraph'
   | 'Spinner'
   | 'ProgressBar'
   | 'Gauge'

@@ -1,4 +1,5 @@
 import type { ComponentNode, ComponentProps, LayoutProps, StyleProps } from './components';
+import type { ComponentEcosystemSpec } from './ecosystem';
 import type {
   EffectDefinition,
   EffectPlaybackSettings,
@@ -111,6 +112,8 @@ export interface ComponentPrototypeSpec {
   /** Legacy v1/v2 motion; v3 keeps it as a preview/export compatibility mirror. */
   animations?: AnimationSpec[];
   keyBindings?: KeyBindingSpec[];
+  /** Production/runtime adapter metadata for the wider Ratatui ecosystem. */
+  ecosystem?: ComponentEcosystemSpec;
 }
 
 export interface DesignTokens {

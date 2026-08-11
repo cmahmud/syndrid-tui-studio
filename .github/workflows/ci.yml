@@ -24,13 +24,6 @@ jobs:
           name: export-check
           path: export-check/
 
-  # The steps below hand the exporter's actual generated output — the
-  # kitchen-sink fixture, the style-edge-cases fixture (gradient/justify/
-  # align/gap), and its ansi16/ansi256 color-tier variants — to each target
-  # language's real toolchain. This catches drift (a bad escape, a broken
-  # import, an upstream API change) that string-snapshot tests alone would
-  # miss. See scripts/generate-export-fixtures.mjs.
-
   verify-rust:
     needs: build
     runs-on: ubuntu-latest
@@ -43,7 +36,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: rust-check
+          workspaces: |
+            rust-check
+            rust/syndrid-ratatui-runtime
+      - name: verify Syndrid Ratatui ecosystem runtime
+        run: |
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+          cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml
+          cargo check --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
+          cargo test --manifest-path rust/syndrid-ratatui-runtime/Cargo.toml --all-features
       - run: mkdir -p rust-check/src
       - run: cp scripts/ci-templates/rust/Cargo.toml rust-check/Cargo.toml
       - name: build each Ratatui variant
@@ -52,6 +53,20 @@ jobs:
             cp "export-check/$f.rs" rust-check/src/main.rs
             cargo build --manifest-path rust-check/Cargo.toml
           done
+
+  verify-tauri-windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust/syndrid-ratatui-runtime
+            src-tauri
+      - name: verify Windows desktop, PTY and ecosystem runtime linkage
+        run: cargo check --manifest-path src-tauri/Cargo.toml
 
   verify-go:
     needs: build

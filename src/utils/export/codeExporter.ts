@@ -27,9 +27,7 @@ export function getExportWarnings(root: ComponentNode | null, format: string): s
   return warnings;
 }
 
-/**
- * Export design to framework-specific code
- */
+/** Export design to framework-specific code. */
 export function exportToCode(
   root: ComponentNode | null,
   format: string,
@@ -38,21 +36,13 @@ export function exportToCode(
   if (!root) return '';
 
   switch (format) {
-    case 'opentui':
-      return exportToOpenTUI(root, colorMode);
-    case 'ink':
-      return exportToInk(root, colorMode);
-    case 'bubbletea':
-      return exportToBubbleTea(root, colorMode);
-    case 'blessed':
-      return exportToBlessed(root, colorMode);
-    case 'textual':
-      return exportToTextual(root);
-    case 'ratatui':
-      return exportToRatatui(root, colorMode);
-    case 'tview':
-      return exportToTview(root, colorMode);
-    default:
-      return `// Unsupported export format: ${format}`;
+    case 'opentui': return exportToOpenTUI(root, colorMode);
+    case 'ink': return exportToInk(root, colorMode);
+    case 'bubbletea': return exportToBubbleTea(root, colorMode);
+    case 'blessed': return exportToBlessed(root, colorMode);
+    case 'textual': return exportToTextual(root);
+    case 'ratatui': return exportToRatatui(root, colorMode);
+    case 'tview': return exportToTview(root, colorMode);
+    default: return `// Unsupported export format: ${format}`;
   }
 }
