@@ -5,8 +5,8 @@
   "version": "../package.json",
   "identifier": "com.syndrid.tuistudio",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run prepare:preview-sidecar && npm run dev",
+    "beforeBuildCommand": "npm run prepare:preview-sidecar:release && npm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -30,12 +30,30 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "connect-src": "ipc: http://ipc.localhost ws://127.0.0.1:5175",
+        "img-src": "'self' asset: http://asset.localhost blob: data: https:",
+        "style-src": "'self' 'unsafe-inline'",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "frame-src": "'none'"
+      },
+      "devCsp": {
+        "default-src": "'self' http://localhost:5173 customprotocol: asset:",
+        "connect-src": "ipc: http://ipc.localhost http://localhost:5173 ws://localhost:5173 ws://127.0.0.1:5175",
+        "img-src": "'self' http://localhost:5173 asset: http://asset.localhost blob: data: https:",
+        "style-src": "'self' 'unsafe-inline' http://localhost:5173",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "frame-src": "'none'"
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "externalBin": ["binaries/syndrid-tui-preview"],
     "category": "DeveloperTool",
     "publisher": "Syndrid",
     "copyright": "Copyright © 2026 Syndrid TUI Studio contributors",

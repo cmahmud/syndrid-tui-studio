@@ -1,3 +1,15 @@
+## Unreleased - Studio hardening and Terminal Test Mode
+
+- Unified TachyonFX preview/save/MCP/export discovery around one canonical resolver.
+- Added deep `.tui` v3 effect/ecosystem validation and canonical v3 autosave migration.
+- Fixed integer terminal-cell layout, hidden responsive children, and preview/matrix/warning resolver drift.
+- Preserved the complete Ratatui runtime-version map and unified generated Cargo guidance.
+- Added real Ratatui + TachyonFX Terminal Test Mode with deterministic fake data, interaction controls, reduced motion, hot reload, and a bundled native sidecar.
+- Added xterm VT emulation for faithful PTY cursor/alternate-screen rendering.
+- Fixed PTY natural-exit cleanup and temporary preview-spec lifecycle.
+- Added a restrictive Tauri CSP and token/origin-protected localhost MCP bridge.
+- Restored structural verification and a production dependency audit gate.
+
 # Changelog
 
 All notable changes to sTUIdio are documented here.

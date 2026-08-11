@@ -1,4 +1,4 @@
-// Flexbox layout calculator
+// Flexbox layout calculator. Terminal geometry is always integer-cell based.
 
 import type { ComponentNode } from '../../types';
 import type { ComputedLayout, FlexItem } from './types';
@@ -14,127 +14,103 @@ export function calculateFlexboxLayout(
   availableHeight: number
 ): Map<string, ComputedLayout> {
   const layouts = new Map<string, ComputedLayout>();
-
   const direction = container.layout.direction || 'row';
   const justify = container.layout.justify || 'start';
   const align = container.layout.align || 'start';
-  const gap = container.layout.gap || 0;
+  const gap = Math.max(0, Math.round(container.layout.gap || 0));
   const wrap = container.layout.wrap || false;
-  const padding = typeof container.layout.padding === 'number' ? container.layout.padding : 0;
-
-  // Calculate content area
-  const contentWidth = availableWidth - padding * 2;
-  const contentHeight = availableHeight - padding * 2;
-
+  const padding = typeof container.layout.padding === 'number' ? Math.max(0, Math.round(container.layout.padding)) : 0;
+  const contentWidth = Math.max(0, Math.round(availableWidth) - padding * 2);
+  const contentHeight = Math.max(0, Math.round(availableHeight) - padding * 2);
   const isRow = direction === 'row';
   const mainSize = isRow ? contentWidth : contentHeight;
-  // Convert children to flex items
-  const flexItems: FlexItem[] = container.children.map((child) => ({
-    id: child.id,
-    flexGrow: 0,
-    flexShrink: 1,
-    flexBasis: 'auto',
-    width: child.props.width,
-    height: child.props.height,
-    // A real, user-settable constraint (ComponentProps.minWidth/minHeight) —
-    // not a hardcoded 1, which made resolveWidth/resolveHeight's `|| 10`/`|| 3`
-    // fallback dead code and let un-sized children (e.g. a Table with no
-    // explicit width/height) collapse to 1x1, going negative once its own
-    // border was subtracted.
-    minWidth: typeof child.props.minWidth === 'number' ? child.props.minWidth : undefined,
-    minHeight: typeof child.props.minHeight === 'number' ? child.props.minHeight : undefined,
-  }));
 
-  // Collect items into flex lines
+  // Hidden responsive/state children must not reserve terminal cells or gaps.
+  const flexItems: FlexItem[] = container.children
+    .filter((child) => !child.hidden)
+    .map((child) => ({
+      id: child.id,
+      flexGrow: 0,
+      flexShrink: 1,
+      flexBasis: 'auto',
+      width: child.props.width,
+      height: child.props.height,
+      minWidth: typeof child.props.minWidth === 'number' ? child.props.minWidth : undefined,
+      minHeight: typeof child.props.minHeight === 'number' ? child.props.minHeight : undefined,
+    }));
+
   const lines = wrap
     ? collectFlexLines(flexItems, mainSize, gap, isRow)
-    : [{ items: flexItems, crossSize: 0 }];
-
-  // The cross dimension items stretch to fill — the container's own cross size
-  // for the common single-line case, matching CSS flexbox's align-items:stretch.
-  // Multiple wrapped lines can't each stretch to the full container without
-  // overlapping, so they fall back to their natural (max-of-items) cross size.
+    : flexItems.length ? [{ items: flexItems, crossSize: 0 }] : [];
   const containerCrossSize = isRow ? contentHeight : contentWidth;
-
   let crossOffset = padding;
 
   lines.forEach((line) => {
-    let mainOffset = padding;
-
-    // Calculate sizes for items in this line
     const sizes = resolveFlexItemSizes(line.items, mainSize, gap, isRow);
+    const lineCrossSize = align === 'stretch' && lines.length === 1
+      ? containerCrossSize
+      : line.items.reduce((max, item) => {
+          const size = isRow ? resolveHeight(item) : resolveWidth(item);
+          return Math.max(max, size);
+        }, 0);
 
-    // Calculate cross size for this line
-    const lineCrossSize =
-      align === 'stretch' && lines.length === 1
-        ? containerCrossSize
-        : line.items.reduce((max, item) => {
-            const size = isRow ? resolveHeight(item) : resolveWidth(item);
-            return Math.max(max, size);
-          }, 0);
-
-    // Apply justify-content
     const totalMainSize = sizes.reduce((sum, size) => sum + size, 0);
-    const totalGap = (line.items.length - 1) * gap;
-    const freeSpace = mainSize - totalMainSize - totalGap;
+    const totalGap = Math.max(0, line.items.length - 1) * gap;
+    const freeSpace = Math.max(0, mainSize - totalMainSize - totalGap);
+    let prefixSize = 0;
 
-    const { spacing, offset } = calculateJustifySpacing(justify, freeSpace, line.items.length);
-    mainOffset += offset;
-
-    // Position each item
     line.items.forEach((item, i) => {
-      const itemMainSize = sizes[i];
-      // An explicit cross-axis size always wins; otherwise stretch fills the line.
+      const itemMainSize = Math.max(0, Math.round(sizes[i]));
       const hasExplicitCrossSize = typeof (isRow ? item.height : item.width) === 'number';
-      const itemCrossSize =
+      const itemCrossSize = Math.max(0, Math.round(
         align === 'stretch' && !hasExplicitCrossSize
           ? lineCrossSize
           : isRow
             ? resolveHeight(item)
-            : resolveWidth(item);
-
-      // Calculate cross-axis alignment
+            : resolveWidth(item)
+      ));
+      const distributed = justifyOffset(justify, freeSpace, line.items.length, i);
+      const mainOffset = padding + prefixSize + gap * i + distributed;
       const crossAlignOffset = calculateAlignOffset(align, lineCrossSize, itemCrossSize);
-
-      const x = isRow ? mainOffset : crossOffset + crossAlignOffset;
-      const y = isRow ? crossOffset + crossAlignOffset : mainOffset;
+      const x = Math.round(isRow ? mainOffset : crossOffset + crossAlignOffset);
+      const y = Math.round(isRow ? crossOffset + crossAlignOffset : mainOffset);
       const width = isRow ? itemMainSize : itemCrossSize;
       const height = isRow ? itemCrossSize : itemMainSize;
-
       layouts.set(item.id, createComputedLayout(x, y, width, height, 0, 0));
-
-      // Add spacing: use justify-content spacing OR gap (not both)
-      // Only add gap if not the last item
-      const isLastItem = i === line.items.length - 1;
-      if (!isLastItem) {
-        if (justify === 'space-between' || justify === 'space-around') {
-          mainOffset += itemMainSize + spacing;
-        } else {
-          mainOffset += itemMainSize + gap;
-        }
-      }
+      prefixSize += itemMainSize;
     });
 
-    crossOffset += lineCrossSize + gap;
+    crossOffset += Math.round(lineCrossSize) + gap;
   });
 
   return layouts;
 }
 
-function collectFlexLines(
-  items: FlexItem[],
-  maxSize: number,
-  gap: number,
-  isRow: boolean
-): FlexLine[] {
+/**
+ * Integer-cell analogue of CSS justify-content. We compute every item's
+ * offset from the same rational distribution and round at the cell boundary,
+ * instead of accumulating fractional positions such as x=3.5.
+ */
+function justifyOffset(justify: string, freeSpace: number, itemCount: number, index: number): number {
+  if (freeSpace <= 0 || itemCount <= 0) return 0;
+  switch (justify) {
+    case 'center': return Math.floor(freeSpace / 2);
+    case 'end': return freeSpace;
+    case 'space-between':
+      return itemCount > 1 ? Math.round((freeSpace * index) / (itemCount - 1)) : 0;
+    case 'space-around':
+      return Math.round((freeSpace * (index + 0.5)) / itemCount);
+    default: return 0;
+  }
+}
+
+function collectFlexLines(items: FlexItem[], maxSize: number, gap: number, isRow: boolean): FlexLine[] {
   const lines: FlexLine[] = [];
   let currentLine: FlexItem[] = [];
   let currentSize = 0;
-
   items.forEach((item) => {
     const itemSize = isRow ? resolveWidth(item) : resolveHeight(item);
     const withGap = currentLine.length > 0 ? gap : 0;
-
     if (currentSize + itemSize + withGap > maxSize && currentLine.length > 0) {
       lines.push({ items: currentLine, crossSize: 0 });
       currentLine = [item];
@@ -144,132 +120,75 @@ function collectFlexLines(
       currentSize += itemSize + withGap;
     }
   });
-
-  if (currentLine.length > 0) {
-    lines.push({ items: currentLine, crossSize: 0 });
-  }
-
+  if (currentLine.length > 0) lines.push({ items: currentLine, crossSize: 0 });
   return lines;
 }
 
-function resolveFlexItemSizes(
-  items: FlexItem[],
-  availableSize: number,
-  gap: number,
-  isRow: boolean
-): number[] {
-  const totalGap = (items.length - 1) * gap;
-  let remainingSize = availableSize - totalGap;
-
-  // First pass: resolve fixed and auto sizes
+function resolveFlexItemSizes(items: FlexItem[], availableSize: number, gap: number, isRow: boolean): number[] {
+  const totalGap = Math.max(0, items.length - 1) * gap;
+  let remainingSize = Math.max(0, availableSize - totalGap);
   const sizes = items.map((item) => {
     const value = isRow ? item.width : item.height;
     if (typeof value === 'number') {
-      remainingSize -= value;
-      return value;
+      const fixed = Math.max(0, Math.round(value));
+      remainingSize -= fixed;
+      return fixed;
     }
-    return -1; // unresolved
+    return -1;
   });
 
-  // Second pass: distribute remaining space to 'fill' items
-  const fillCount = sizes.filter((s) => s === -1).length;
-  if (fillCount > 0 && remainingSize > 0) {
-    const fillSize = Math.max(1, Math.floor(remainingSize / fillCount));
-    for (let i = 0; i < sizes.length; i++) {
-      if (sizes[i] === -1) {
-        sizes[i] = fillSize;
-      }
+  const fillIndices = sizes.map((size, index) => size === -1 ? index : -1).filter((index) => index >= 0);
+  if (fillIndices.length > 0 && remainingSize > 0) {
+    const base = Math.floor(remainingSize / fillIndices.length);
+    let remainder = remainingSize % fillIndices.length;
+    for (const index of fillIndices) {
+      sizes[index] = Math.max(1, base + (remainder > 0 ? 1 : 0));
+      if (remainder > 0) remainder -= 1;
     }
   } else {
-    // Fallback for auto items
     for (let i = 0; i < sizes.length; i++) {
-      if (sizes[i] === -1) {
-        sizes[i] = isRow ? items[i].minWidth || 10 : items[i].minHeight || 3;
-      }
+      if (sizes[i] === -1) sizes[i] = isRow ? resolveWidth(items[i]) : resolveHeight(items[i]);
     }
   }
-
   return sizes;
 }
 
 function resolveWidth(item: FlexItem): number {
-  if (typeof item.width === 'number') return item.width;
-  return item.minWidth || 10;
+  if (typeof item.width === 'number') return Math.max(0, Math.round(item.width));
+  return Math.max(1, Math.round(item.minWidth || 10));
 }
 
 function resolveHeight(item: FlexItem): number {
-  if (typeof item.height === 'number') return item.height;
-  return item.minHeight || 3;
-}
-
-function calculateJustifySpacing(
-  justify: string,
-  freeSpace: number,
-  itemCount: number
-): { spacing: number; offset: number } {
-  if (freeSpace <= 0) return { spacing: 0, offset: 0 };
-
-  switch (justify) {
-    case 'center':
-      return { spacing: 0, offset: freeSpace / 2 };
-    case 'end':
-      return { spacing: 0, offset: freeSpace };
-    case 'space-between':
-      return itemCount > 1
-        ? { spacing: freeSpace / (itemCount - 1), offset: 0 }
-        : { spacing: 0, offset: 0 };
-    case 'space-around': {
-      const spacing = freeSpace / itemCount;
-      return { spacing, offset: spacing / 2 };
-    }
-    default: // 'start'
-      return { spacing: 0, offset: 0 };
-  }
+  if (typeof item.height === 'number') return Math.max(0, Math.round(item.height));
+  return Math.max(1, Math.round(item.minHeight || 3));
 }
 
 function calculateAlignOffset(align: string, containerSize: number, itemSize: number): number {
   switch (align) {
-    case 'center':
-      return (containerSize - itemSize) / 2;
-    case 'end':
-      return containerSize - itemSize;
-    case 'stretch':
-      return 0; // item's cross size is already set to fill the line, so no offset
-    default: // 'start'
-      return 0;
+    case 'center': return Math.floor((containerSize - itemSize) / 2);
+    case 'end': return containerSize - itemSize;
+    default: return 0;
   }
 }
 
-function createComputedLayout(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  padding: number,
-  margin: number
-): ComputedLayout {
+function createComputedLayout(x: number, y: number, width: number, height: number, padding: number, margin: number): ComputedLayout {
   return {
-    x,
-    y,
-    width,
-    height,
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(0, Math.round(width)),
+    height: Math.max(0, Math.round(height)),
     contentBox: {
-      x: x + padding,
-      y: y + padding,
-      width: Math.max(0, width - padding * 2),
-      height: Math.max(0, height - padding * 2),
+      x: Math.round(x + padding),
+      y: Math.round(y + padding),
+      width: Math.max(0, Math.round(width - padding * 2)),
+      height: Math.max(0, Math.round(height - padding * 2)),
     },
-    paddingBox: {
-      x,
-      y,
-      width,
-      height,
-    },
+    paddingBox: { x: Math.round(x), y: Math.round(y), width: Math.max(0, Math.round(width)), height: Math.max(0, Math.round(height)) },
     marginBox: {
-      x: x - margin,
-      y: y - margin,
-      width: width + margin * 2,
-      height: height + margin * 2,
+      x: Math.round(x - margin),
+      y: Math.round(y - margin),
+      width: Math.max(0, Math.round(width + margin * 2)),
+      height: Math.max(0, Math.round(height + margin * 2)),
     },
   };
 }

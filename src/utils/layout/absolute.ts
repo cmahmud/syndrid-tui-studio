@@ -1,4 +1,4 @@
-// Absolute positioning calculator
+// Absolute positioning calculator — all geometry is integer terminal cells.
 
 import type { ComponentNode } from '../../types';
 import type { ComputedLayout } from './types';
@@ -9,40 +9,23 @@ export function calculateAbsoluteLayout(
   availableHeight: number
 ): Map<string, ComputedLayout> {
   const layouts = new Map<string, ComputedLayout>();
+  const padding = typeof container.layout.padding === 'number' ? Math.max(0, Math.round(container.layout.padding)) : 0;
 
-  const padding = typeof container.layout.padding === 'number' ? container.layout.padding : 0;
-
-  container.children.forEach((child) => {
-    // Get absolute position from child's layout
-    const x = (child.layout.x || 0) + padding;
-    const y = (child.layout.y || 0) + padding;
-
-    // Resolve dimensions
-    let width = 20; // default
-    let height = 3; // default
-
-    if (typeof child.props.width === 'number') {
-      width = child.props.width;
-    } else if (child.props.width === 'fill') {
-      width = availableWidth - x - padding;
-    }
-
-    if (typeof child.props.height === 'number') {
-      height = child.props.height;
-    } else if (child.props.height === 'fill') {
-      height = availableHeight - y - padding;
-    }
-
+  container.children.filter((child) => !child.hidden).forEach((child) => {
+    const x = Math.round((typeof child.layout.x === 'number' ? child.layout.x : 0) + padding);
+    const y = Math.round((typeof child.layout.y === 'number' ? child.layout.y : 0) + padding);
+    let width = 20;
+    let height = 3;
+    if (typeof child.props.width === 'number') width = Math.max(0, Math.round(child.props.width));
+    else if (child.props.width === 'fill') width = Math.max(0, Math.round(availableWidth) - x - padding);
+    if (typeof child.props.height === 'number') height = Math.max(0, Math.round(child.props.height));
+    else if (child.props.height === 'fill') height = Math.max(0, Math.round(availableHeight) - y - padding);
     layouts.set(child.id, {
-      x,
-      y,
-      width,
-      height,
+      x, y, width, height,
       contentBox: { x, y, width, height },
       paddingBox: { x, y, width, height },
       marginBox: { x, y, width, height },
     });
   });
-
   return layouts;
 }

@@ -151,6 +151,50 @@ export interface ProjectSettings {
   terminalCellHeightPx: number;
 }
 
+export type TerminalTestPreset =
+  | 'default'
+  | 'empty'
+  | 'loading'
+  | 'loaded'
+  | 'error'
+  | 'offline'
+  | 'slow-network'
+  | 'large-data'
+  | 'unicode'
+  | 'custom';
+
+export interface TerminalTestTimelineEvent {
+  atMs: number;
+  componentId?: string;
+  property?: string;
+  value?: unknown;
+  state?: string;
+  event?: string;
+}
+
+export interface TerminalTestScenario {
+  id: string;
+  name: string;
+  preset: TerminalTestPreset;
+  seed: number;
+  durationMs: number;
+  variables: Record<string, unknown>;
+  timeline: TerminalTestTimelineEvent[];
+}
+
+export interface TerminalTestSettings {
+  viewportId: ViewportId;
+  scenarioId: string;
+  speed: number;
+  reducedMotion: boolean;
+  loop: boolean;
+  fakeData: boolean;
+  hotReload: boolean;
+  interactive: boolean;
+  showDebugOverlay: boolean;
+  startAtMs: number;
+}
+
 export interface SyndridProjectData {
   version: '3';
   settings: ProjectSettings;
@@ -161,4 +205,7 @@ export interface SyndridProjectData {
   effectPlayback: EffectPlaybackSettings;
   imageAssets: ImageAssetDefinition[];
   runtimeLibraries: RatatuiRuntimeLibraries;
+  /** Custom test scenarios; built-in scenarios are supplied by Studio itself. */
+  testScenarios: TerminalTestScenario[];
+  terminalTest: TerminalTestSettings;
 }

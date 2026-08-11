@@ -24,6 +24,10 @@ export function loadNativeImageDataUri(path: string): Promise<string> {
   return nativeInvoke<string>('image_preview_data_uri', { path });
 }
 
+export function getNativeAgentBridgeToken(): Promise<string> {
+  return nativeInvoke<string>('agent_bridge_token');
+}
+
 export function startNativePty(sessionId: string, command: string, cwd?: string, cols = 100, rows = 30): Promise<void> {
   return nativeInvoke<void>('pty_start', {
     sessionId,
@@ -31,6 +35,15 @@ export function startNativePty(sessionId: string, command: string, cwd?: string,
     cwd: cwd?.trim() ? cwd.trim() : null,
     cols,
     rows,
+  });
+}
+
+export function startNativeTerminalTest(sessionId: string, specJson: string, cols: number, rows: number): Promise<void> {
+  return nativeInvoke<void>('preview_start', {
+    sessionId,
+    specJson,
+    cols: Math.max(1, Math.floor(cols)),
+    rows: Math.max(1, Math.floor(rows)),
   });
 }
 

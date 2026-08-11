@@ -67,7 +67,7 @@ const files = blessed.list({
   parent: body,
   top: 0,
   left: 0,
-  width: 2,
+  width: 3,
   height: 3,
   border: { type: 'line' },
   label: " Files ",
@@ -85,8 +85,8 @@ files.on("keypress", handleFzfKeys);
 const explorer = blessed.box({
   parent: body,
   top: 0,
-  left: 2,
-  width: 2,
+  left: 3,
+  width: 3,
   height: 3,
   content: "Root\\n  ├─ Child 1\\n  ├─ Child 2\\n    ├─ Nested",
 });
@@ -94,7 +94,7 @@ const explorer = blessed.box({
 const stats = blessed.listtable({
   parent: body,
   top: 0,
-  left: 4,
+  left: 6,
   width: 2,
   height: 3,
   rows: [["PID", "CPU"], ["123", "45%"], ["456", "2%"]],
@@ -109,7 +109,7 @@ stats.on("keypress", handleTableKeys);
 const nav2 = blessed.list({
   parent: body,
   top: 0,
-  left: 6,
+  left: 8,
   width: 2,
   height: 3,
   mouse: true,
@@ -1572,13 +1572,13 @@ const banner = blessed.box({
   top: 0,
   left: 0,
   width: 10,
-  height: 8,
+  height: 9,
   style: { bg: "#ff0000" },
 });
 
 const centeredRow = blessed.box({
   parent: screen,
-  top: 8,
+  top: 9,
   left: 0,
   width: 10,
   height: 8,
@@ -1587,8 +1587,8 @@ const centeredRow = blessed.box({
 const a = blessed.box({
   parent: centeredRow,
   top: 0,
-  left: 0.5,
-  width: 3,
+  left: 0,
+  width: 4,
   height: 1,
   content: "A",
   style: { fg: "#800" },
@@ -1597,7 +1597,7 @@ const a = blessed.box({
 const b = blessed.box({
   parent: centeredRow,
   top: 0,
-  left: 6.5,
+  left: 7,
   width: 3,
   height: 1,
   content: "B",
@@ -1606,7 +1606,7 @@ const b = blessed.box({
 
 const spacedColumn = blessed.box({
   parent: screen,
-  top: 16,
+  top: 17,
   left: 0,
   width: 10,
   height: 8,
