@@ -3,7 +3,7 @@ import type { ComponentNode, SyndridProjectData } from '../../types';
 import { exportRatatuiEcosystem } from '../ratatuiEcosystemExporter';
 import { defaultEcosystemSpec } from '../../data/ratatuiEcosystem';
 
-function node(id: string, type: ComponentNode['type'], adapter: Parameters<typeof defaultEcosystemSpec>[0]): ComponentNode {
+function node(id: string, type: ComponentNode['type'], adapter?: Parameters<typeof defaultEcosystemSpec>[0]): ComponentNode {
   return {
     id,
     type,
@@ -13,7 +13,7 @@ function node(id: string, type: ComponentNode['type'], adapter: Parameters<typeo
     style: {},
     events: {},
     children: [],
-    prototype: { ecosystem: defaultEcosystemSpec(adapter) },
+    ...(adapter ? { prototype: { ecosystem: defaultEcosystemSpec(adapter) } } : {}),
     locked: false,
     hidden: false,
     collapsed: false,
@@ -43,6 +43,30 @@ describe('Ratatui ecosystem exporter', () => {
     expect(result.cargoSnippet).toContain('tui-tree-widget');
     expect(result.cargoSnippet).toContain('tui-syntax-highlight');
     expect(result.cargoSnippet).toContain('termprofile');
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('infers production adapters for first-class ecosystem components before inspector edits', () => {
+    const root = node('root', 'Screen', 'native');
+    const image = node('img', 'Image');
+    image.props.assetId = 'logo';
+    const terminal = node('term', 'Terminal');
+    terminal.props.command = 'cargo run';
+    const code = node('code', 'Code');
+    code.props.language = 'rust';
+    const ansi = node('ansi', 'AnsiText');
+    const graph = node('graph', 'NodeGraph');
+    root.children = [image, terminal, code, ansi, graph];
+
+    const result = exportRatatuiEcosystem(root, project);
+    expect(result.bindings.map((binding) => binding.spec.adapter)).toEqual([
+      'image', 'terminal', 'syntax-highlight', 'ansi-text', 'node-graph',
+    ]);
+    expect(result.cargoSnippet).toContain('ratatui-image');
+    expect(result.cargoSnippet).toContain('tui-term');
+    expect(result.cargoSnippet).toContain('tui-syntax-highlight');
+    expect(result.cargoSnippet).toContain('ansi-to-tui');
+    expect(result.cargoSnippet).toContain('tui-nodes');
     expect(result.warnings).toEqual([]);
   });
 
