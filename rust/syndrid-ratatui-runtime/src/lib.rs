@@ -31,7 +31,6 @@ pub use tui_widget_list;
 #[cfg(feature = "embedded")]
 pub use mousefood;
 
-/// Dependency metadata surfaced to Studio/MCP and embedded in exported specs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeLibrary {
     pub id: &'static str,
@@ -163,13 +162,11 @@ mod tests {
     #[cfg(feature = "advanced")]
     #[test]
     fn advanced_crates_are_linked() {
-        // Referencing module paths forces every optional dependency through
-        // Cargo resolution/type checking while keeping the test backend-free.
         let names = [
-            std::any::type_name::<tui_tree_widget::TreeState>(),
+            std::any::type_name::<tui_tree_widget::TreeState<usize>>(),
             std::any::type_name::<tui_widget_list::ListState>(),
+            std::any::type_name::<tui_term::widget::Cursor>(),
         ];
         assert!(names.iter().all(|name| !name.is_empty()));
-        let _ = std::mem::size_of::<Option<tui_term::widget::PseudoTerminal<'static>>>();
     }
 }
