@@ -30,11 +30,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Verify Syndrid extensions
-        run: npm run verify:syndrid
+      - name: Lint
+        run: npm run lint
 
       - name: Run tests
         run: npm test
+
+      - name: Build frontend
+        run: npm run build
 
       - name: Build and publish Windows installer
         uses: tauri-apps/tauri-action@v1
